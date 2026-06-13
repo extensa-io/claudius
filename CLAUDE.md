@@ -78,6 +78,14 @@ These hold in every phase. Violating any of them is a bug regardless of what els
 - Errors: typed result objects or thrown `AppError` with a user-safe message; never leak internals to the client
 - Indexes are defined in code (`packages/shared/src/db/indexes.ts`) and applied by an idempotent script, not created ad hoc
 
+### Workspace dependency ownership
+
+Every devDep needed by a workspace's build, lint, typecheck, or test runs must be declared in that workspace's `package.json`, not at the monorepo root. Root devDeps are reserved for cross-workspace orchestration (currently only `vitest` for the root test runner that walks `test.projects`).
+
+Why: Vercel's monorepo install scopes to the Root Directory workspace's declared deps. Anything sitting only at root is invisible to `next build` and surfaces as a `Cannot find module` error during the deployed TypeScript check. Duplication between root and workspace is fine — npm dedupes via the lockfile — but each workspace must self-declare what its scripts and config files import.
+
+When adding a new tool: figure out which workspaces import it (in scripts, config files, source, or tests) and declare it as a devDep in each one. If it is only used at root, declare it at root and nowhere else.
+
 ## Environment variables
 
 `MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY` (Phase 2), `TAVILY_API_KEY` (Phase 1), `BLOB_READ_WRITE_TOKEN` (Phase 2), `LANGSMITH_*` (Phase 5), `ADMIN_EMAIL` (bootstrap admin). Validate all of them in `packages/shared/src/env.ts`.
