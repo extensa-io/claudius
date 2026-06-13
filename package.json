@@ -1,0 +1,27 @@
+{
+  "name": "claudius",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "npm -w @claudius/app run dev",
+    "build": "npm -w @claudius/app run build",
+    "start": "npm -w @claudius/app run start",
+    "typecheck": "npm -ws run typecheck --if-present",
+    "lint": "npm -ws run lint --if-present",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm run test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}

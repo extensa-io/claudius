@@ -1,0 +1,97 @@
+# Claudius
+
+I'm building my own Claude, powered by MongoDB, for authorized users, with a capped public guest tier.
+Built as a learning project and the subject of a published article series.
+Not commercial.
+The app is hosted at askclaudius.dev
+
+## How to work in this repo
+
+Work strictly phase by phase. The current phase spec lives in `specs/` and is the single source of truth for scope. Do not implement features from later phases, even partially, unless the current spec says so. When a spec and this file conflict, the spec wins for scope and this file wins for conventions and invariants.
+
+The `specs/` directory is private. It is gitignored and never pushed to the public repo. The five-phase arc, editorial sequencing, and design rationale inside it are part of the article series, not the codebase. Treat specs as the authoritative scope contract while working locally, but do not quote or paraphrase spec contents in commit messages, PR descriptions, code comments, or any other text that lands in the public repo. Public-facing artifacts should derive from the work itself.
+
+Before marking a phase complete, verify every item under its Acceptance criteria heading and run `npm run check`.
+
+## Stack
+
+- Next.js (App Router) on Vercel, TypeScript strict mode everywhere
+- Auth.js v5 (`next-auth@beta`) with Google provider and `@auth/mongodb-adapter`
+- MongoDB Atlas: application data, LangGraph checkpoints, Atlas Vector Search
+- LangGraph JS (`@langchain/langgraph`) as the agent runtime
+- `@langchain/langgraph-checkpoint-mongodb` for conversation state
+- `@langchain/aws` ChatBedrockConverse for all Claude model access via AWS Bedrock
+- Vercel AI SDK (`ai`, `@ai-sdk/react`) for the streaming chat frontend
+- Voyage AI (`voyage-4`) for embeddings
+- Vercel Blob for raw file storage with direct client uploads
+- Tavily for web search
+- Zod for every external boundary (API input, env, model output parsing)
+- From Phase 4: a Railway worker service in this same monorepo under `packages/worker/`
+
+Install latest stable versions and consult current package documentation rather than assuming API shapes. LangChain and the AI SDK move fast; verify signatures against the installed version.
+
+## Repo layout
+
+npm workspaces monorepo. Two packages from Phase 0, a third (`worker`) joins in Phase 4.
+
+```
+packages/
+  app/                          Next.js App Router (the deployed Vercel web app)
+    app/                          Routes and UI
+    lib/auth/                     Auth.js config, role resolution, allowlist
+    lib/                          App-only helpers (anything Next.js-bound)
+  shared/                       Shared library, imported by app and (later) worker
+    src/env.ts                    Zod-validated env schema
+    src/db/                       Mongo client, collection helpers, Zod schemas, indexes
+    src/agent/                    LangGraph graph, tools, prompts, checkpointer setup
+    src/tiers/                    Tier definitions, enforcement middleware, circuit breaker
+    src/usage/                    usage_events writers and aggregation helpers
+  worker/                       Railway worker (added in Phase 4)
+specs/                          Phase specs — private, gitignored, never pushed
+```
+
+`@claudius/shared` is consumed by `@claudius/app` via npm workspace resolution and Next.js `transpilePackages`. Anything that the Phase 4 worker will also need lives in `shared`; anything Next.js-bound (route handlers, Auth.js wiring, React components) lives in `app`.
+
+## Data model
+
+Database `claudius`. Collections: `users`, `conversations`, `checkpoints`, `checkpoint_writes`, `memories`, `documents`, `chunks`, `usage_events`, `settings`, `jobs` (Phase 4). Field-level definitions live in `packages/shared/src/db/schemas.ts` once created; the authoritative design is `specs/phase-0-foundations.md`. The checkpointer owns `checkpoints` and `checkpoint_writes`; never write to them directly.
+
+## Non-negotiable invariants
+
+These hold in every phase. Violating any of them is a bug regardless of what else works.
+
+1. Every query touching user-owned data filters by `userId` at the query layer. No route, tool, or vector search may return another user's conversations, memories, documents, or chunks. Vector searches use pre-filters, never post-filtering.
+2. Roles are `admin`, `member`, `guest`. Role is resolved server-side in the Auth.js `signIn`/`jwt` callbacks from the allowlist in `settings`. The client never supplies role or tier information; the session token does.
+3. Every Bedrock invocation goes through the tier enforcement layer in `packages/shared/src/tiers/` (model allowed for role, daily message cap, guest circuit breaker) and writes a `usage_events` document with token counts. No direct model calls that bypass these.
+4. Guest-created documents in `conversations`, `memories`, and conversation threads carry `expiresAt` for the TTL index. Member and admin documents omit the field.
+5. Secrets only via environment variables validated by a Zod env schema at startup. Never log secrets, tokens, or full message content in production paths.
+6. Admin role grants access to settings, user management, and aggregate usage data. It never grants read access to other users' conversation or memory content.
+7. No public registration logic beyond Google sign-in with server-side role assignment. There is no path that elevates a guest except an admin action.
+
+## Conventions
+
+- TypeScript strict, no `any`, no non-null assertions where a guard is reasonable
+- Zod schemas are the single type source for documents; derive TS types with `z.infer`
+- Server components by default; client components only where interactivity requires
+- Route handlers stay thin: validate, call a `shared` or `app/lib` function, shape the response
+- Named exports, no default exports except Next.js conventions require them
+- Errors: typed result objects or thrown `AppError` with a user-safe message; never leak internals to the client
+- Indexes are defined in code (`packages/shared/src/db/indexes.ts`) and applied by an idempotent script, not created ad hoc
+
+## Environment variables
+
+`MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY` (Phase 2), `TAVILY_API_KEY` (Phase 1), `BLOB_READ_WRITE_TOKEN` (Phase 2), `LANGSMITH_*` (Phase 5), `ADMIN_EMAIL` (bootstrap admin). Validate all of them in `packages/shared/src/env.ts`.
+
+## Commands
+
+- `npm run dev` local development
+- `npm run check` typecheck + lint + tests (must pass before any phase is complete)
+- `npm run db:indexes` apply index definitions idempotently
+
+## Bedrock notes
+
+Use cross-region inference profile IDs from the `settings` model catalog, not bare model IDs. The model catalog document holds id, display name, per-million-token input and output pricing, and which roles may use it. Token counts for `usage_events` come from the Converse response usage metadata.
+
+## Content awareness
+
+This build is documented publicly. Prefer clear, explainable implementations over clever ones; code from this repo appears in articles read by developers coming from relational backgrounds. When a design decision is interesting (embed vs reference, pre-filtering vector search, TTL-based ephemerality, change streams as a job bus), leave a short comment explaining why, since those comments seed the articles.
