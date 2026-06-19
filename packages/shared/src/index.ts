@@ -3,7 +3,7 @@
 // is runtime-agnostic.
 
 export { env, type Env } from "./env";
-export { clientPromise, getDb } from "./db/client";
+export { clientPromise, getDb, DB_NAME } from "./db/client";
 export * from "./db/collections";
 export * from "./db/schemas";
 export { applyIndexes } from "./db/indexes";
