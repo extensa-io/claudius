@@ -14,7 +14,7 @@ export default async function Home() {
         <div className="space-y-2">
           <h1 className="text-4xl font-bold tracking-tight">Claudius</h1>
           <p className="text-zinc-600 dark:text-zinc-400">
-            Building my own Claude, powered by MongoDB.
+            Building my own Claude-based chatbot, powered by MongoDB.
           </p>
         </div>
 
