@@ -10,10 +10,16 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@auth/mongodb-adapter": "^3.11.2",
     "@claudius/shared": "*",
+    "@langchain/aws": "^1.4.1",
+    "@langchain/core": "^1.2.0",
+    "mongodb": "^7.3.0",
     "next": "^15.0.0",
+    "next-auth": "^5.0.0-beta.31",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.0.0",

@@ -15,9 +15,14 @@
     "typecheck": "npm -ws run typecheck --if-present",
     "lint": "npm -ws run lint --if-present",
     "test": "vitest run",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "db:indexes": "npm -w @claudius/shared run db:indexes",
+    "db:seed": "npm -w @claudius/shared run db:seed"
   },
   "devDependencies": {
     "vitest": "^3.0.0"
+  },
+  "overrides": {
+    "mongodb": "7.3.0"
   }
 }
