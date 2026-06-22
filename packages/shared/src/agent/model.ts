@@ -6,6 +6,13 @@ const DEFAULT_MAX_TOKENS = 4096;
 
 export interface BuildChatModelOptions {
   maxTokens?: number;
+  /**
+   * Sampling temperature. Left UNSET by default on purpose: the newest models
+   * (e.g. Opus 4.8) reject `temperature` outright with a ValidationException, so
+   * we only send it when a caller explicitly opts in (and only for models known
+   * to accept it, like Haiku for title generation). Chat runs omit it and let
+   * each model use its own default.
+   */
   temperature?: number;
 }
 
@@ -32,7 +39,10 @@ export function buildChatModel(
       secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
     },
     maxTokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
-    temperature: options.temperature ?? 0.7,
     streamUsage: true,
+    // Only include temperature when explicitly provided — see the option doc.
+    ...(options.temperature !== undefined
+      ? { temperature: options.temperature }
+      : {}),
   });
 }
