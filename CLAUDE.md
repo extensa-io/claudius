@@ -1,6 +1,6 @@
 # Claudius
 
-I'm building my own Claude, powered by MongoDB, for authorized users, with a capped public guest tier.
+I'm building my own Claude-based chatbot, powered by MongoDB, for authorized users, with a capped public guest tier.
 Built as a learning project and the subject of a published article series.
 Not commercial.
 The app is hosted at askclaudius.dev

@@ -16,7 +16,7 @@ export default async function Home(): Promise<React.ReactNode> {
         <div className="space-y-3">
           <h1 className="text-4xl font-semibold tracking-tight">Claudius</h1>
           <p className="text-muted-foreground">
-            My own Claude, powered by MongoDB.
+            My own Claude-based chatbot, powered by MongoDB.
           </p>
         </div>
 

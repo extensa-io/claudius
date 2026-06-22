@@ -10,7 +10,7 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Claudius",
-  description: "Building my own Claude, powered by MongoDB.",
+  description: "Building my own Claude-based chatbot, powered by MongoDB.",
 };
 
 export default function RootLayout({
