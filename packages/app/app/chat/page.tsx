@@ -41,7 +41,17 @@ export default async function ChatPage({
     const conversation = await getOwnedConversation(userId, c);
     if (conversation) {
       initialConversationId = c;
-      initialMessages = toUIMessages(await loadThreadMessages(c));
+      try {
+        initialMessages = toUIMessages(await loadThreadMessages(c));
+      } catch (err) {
+        // A failure to read history must not take down the whole page. Keep the
+        // conversation selected (the model still has full context from the
+        // checkpointer) and log the real cause for diagnosis.
+        console.error(
+          `Failed to load history for conversation ${c}:`,
+          err instanceof Error ? `${err.name}: ${err.message}` : err,
+        );
+      }
     }
   }
 

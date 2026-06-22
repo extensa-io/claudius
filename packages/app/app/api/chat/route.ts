@@ -80,8 +80,16 @@ export const POST = auth(async (req) => {
     const graph = await getChatGraph();
 
     const stream = createUIMessageStream<ClaudiusUIMessage>({
-      onError: (error) =>
-        isAppError(error) ? error.message : "The model run failed.",
+      onError: (error) => {
+        // Errors thrown mid-stream (e.g. a Bedrock ValidationException for a bad
+        // inference profile id) never reach the outer catch, so log them here for
+        // diagnosis. The client still gets only a user-safe message.
+        console.error(
+          `Chat stream error (model=${grant.modelId}):`,
+          error instanceof Error ? `${error.name}: ${error.message}` : error,
+        );
+        return isAppError(error) ? error.message : "The model run failed.";
+      },
       execute: async ({ writer }) => {
         writer.write({ type: "start" });
         // Hand the (possibly newly created) conversation id back to the client.
