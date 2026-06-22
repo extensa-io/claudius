@@ -8,8 +8,8 @@ import { z } from "zod";
  * cryptic error deep inside a request. Only the variable *names* are ever
  * surfaced on failure; values are never logged (invariant: never log secrets).
  *
- * Phase 0 declares only the variables Phase 0 actually uses. Later phases add
- * their own (Voyage, Tavily, Blob, LangSmith) as they arrive.
+ * Each phase declares only the variables it actually uses. Later phases add
+ * their own (Voyage, Blob, LangSmith) as they arrive.
  */
 const EnvSchema = z.object({
   MONGODB_URI: z.string().url(),
@@ -20,6 +20,8 @@ const EnvSchema = z.object({
   AWS_SECRET_ACCESS_KEY: z.string().min(1),
   AWS_REGION: z.string().min(1),
   ADMIN_EMAIL: z.string().email(),
+  // Phase 1: Tavily powers the agent's web_search tool.
+  TAVILY_API_KEY: z.string().min(1),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

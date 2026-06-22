@@ -13,6 +13,7 @@ const VALID_ENV: Record<string, string> = {
   AWS_SECRET_ACCESS_KEY: "aws-secret",
   AWS_REGION: "us-east-1",
   ADMIN_EMAIL: "admin@example.com",
+  TAVILY_API_KEY: "tvly-test",
 };
 
 const ORIGINAL_ENV = process.env;
