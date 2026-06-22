@@ -29,7 +29,9 @@ export type ClaudiusStreamWriter = UIMessageStreamWriter<ClaudiusUIMessage>;
  * absent on the first message of a new conversation; the server creates it.
  */
 export const ChatRequestSchema = z.object({
-  conversationId: z.string().min(1).optional(),
+  // nullish, not optional: the client sends `null` (not just an absent key) for
+  // the first message of a new conversation, and `.optional()` rejects `null`.
+  conversationId: z.string().min(1).nullish(),
   modelId: z.string().min(1),
   text: z.string().min(1).max(32_000),
 });
