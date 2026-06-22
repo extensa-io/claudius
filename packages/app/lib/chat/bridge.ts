@@ -112,16 +112,21 @@ export async function bridgeGraphEvents(
       }
 
       case "on_tool_start": {
+        // dynamic: true so these assemble into a `dynamic-tool` UI part on the
+        // client. The tool isn't registered client-side with a schema, so it is
+        // dynamic by definition; this keeps the part strongly typed to render.
         writer.write({
           type: "tool-input-start",
           toolCallId: ev.run_id,
           toolName: ev.name,
+          dynamic: true,
         });
         writer.write({
           type: "tool-input-available",
           toolCallId: ev.run_id,
           toolName: ev.name,
           input: ev.data?.input ?? {},
+          dynamic: true,
         });
         break;
       }
@@ -131,6 +136,7 @@ export async function bridgeGraphEvents(
           type: "tool-output-available",
           toolCallId: ev.run_id,
           output: parseToolOutput(ev.data?.output),
+          dynamic: true,
         });
         break;
       }
