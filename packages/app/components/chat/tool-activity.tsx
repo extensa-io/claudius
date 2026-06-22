@@ -1,0 +1,101 @@
+"use client";
+
+import type { DynamicToolUIPart } from "ai";
+import { ChevronDown, Globe, Loader2 } from "lucide-react";
+import { useState } from "react";
+import type { WebSearchToolOutput } from "@/lib/chat/view-types";
+import { cn } from "@/lib/utils";
+
+/**
+ * Renders the agent's tool activity inline in the thread. While a search runs
+ * the user sees a live "Searching the web" indicator with the query; once it
+ * returns, that collapses into a quiet, expandable list of sources. Making every
+ * tool call visible (and inspectable) is a deliberate product choice.
+ */
+function isWebSearchOutput(value: unknown): value is WebSearchToolOutput {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as { results?: unknown }).results)
+  );
+}
+
+export function ToolActivity({
+  part,
+}: {
+  part: DynamicToolUIPart;
+}): React.ReactNode {
+  const [open, setOpen] = useState(false);
+
+  const query =
+    typeof part.input === "object" && part.input !== null
+      ? String((part.input as { query?: unknown }).query ?? "")
+      : "";
+
+  if (part.state === "input-streaming" || part.state === "input-available") {
+    return (
+      <div className="my-2 flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" />
+        <span>
+          Searching the web{query ? ` for “${query}”` : ""}
+          <span className="ml-0.5 animate-pulse">…</span>
+        </span>
+      </div>
+    );
+  }
+
+  if (part.state === "output-error") {
+    return (
+      <div className="my-2 flex items-center gap-2 text-sm text-destructive">
+        <Globe className="size-3.5" />
+        Web search failed.
+      </div>
+    );
+  }
+
+  if (part.state !== "output-available") return null;
+
+  const results = isWebSearchOutput(part.output) ? part.output.results : [];
+
+  return (
+    <div className="my-2 rounded-lg border border-border bg-muted/40 text-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-muted-foreground hover:text-foreground"
+      >
+        <Globe className="size-3.5 shrink-0" />
+        <span className="flex-1">
+          Searched the web
+          {query ? ` for “${query}”` : ""} · {results.length}{" "}
+          {results.length === 1 ? "source" : "sources"}
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 transition-transform",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && results.length > 0 && (
+        <ul className="space-y-2 border-t border-border px-3 py-2">
+          {results.map((r, i) => (
+            <li key={`${r.url}-${i}`} className="text-sm">
+              <a
+                href={r.url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-primary hover:underline"
+              >
+                {r.title || r.url}
+              </a>
+              <p className="line-clamp-2 text-xs text-muted-foreground">
+                {r.snippet}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
