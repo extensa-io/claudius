@@ -76,7 +76,9 @@ export function Sidebar({
                     <span className="truncate text-sm font-medium">
                       {c.title}
                     </span>
-                    <span className="shrink-0 text-[0.7rem] text-muted-foreground">
+                    {/* Hidden on hover so the archive button can sit here
+                        without overlapping the timestamp. */}
+                    <span className="shrink-0 text-[0.7rem] text-muted-foreground group-hover:invisible">
                       {relativeStamp(c.updatedAt)}
                     </span>
                   </div>
@@ -88,7 +90,7 @@ export function Sidebar({
                   type="button"
                   aria-label="Archive conversation"
                   onClick={() => onArchive(c.id)}
-                  className="absolute top-2 right-1.5 hidden rounded p-1 text-muted-foreground hover:bg-sidebar-border hover:text-foreground group-hover:block"
+                  className="absolute top-1.5 right-1.5 hidden rounded p-1 text-warning hover:bg-warning/10 group-hover:block"
                 >
                   <Archive className="size-3.5" />
                 </button>
