@@ -113,7 +113,7 @@ export function ChatPane({
         />
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1">
         {isEmpty ? (
           <div className="flex h-full items-center justify-center px-6">
             <p className="text-center text-muted-foreground">

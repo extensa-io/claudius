@@ -149,4 +149,10 @@
   html {
     @apply font-sans;
     }
+  /* Tailwind v4 / shadcn don't set a pointer cursor on buttons by default. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a[href] {
+    cursor: pointer;
+    }
 }
