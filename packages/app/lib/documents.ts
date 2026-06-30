@@ -135,20 +135,20 @@ export async function associatePendingDocuments(
 }
 
 /**
- * The ids of a conversation's documents that are ready for retrieval (embedded).
- * The chat route passes these to the agent so `retrieve_documents` searches only
- * this conversation's fully-ingested files.
+ * A conversation's documents that are ready for retrieval (embedded), with their
+ * names. The chat route passes the ids to scope `retrieve_documents` and the
+ * names into the system prompt so the model knows files are present.
  */
-export async function getRetrievableDocumentIds(
+export async function getRetrievableDocuments(
   userId: ObjectId,
   conversationId: ObjectId,
-): Promise<ObjectId[]> {
+): Promise<Array<{ id: string; filename: string }>> {
   const col = await documentsCol();
   const docs = await col
     .find(
       { userId, conversationId, status: "embedded" },
-      { projection: { _id: 1 } },
+      { projection: { _id: 1, filename: 1 } },
     )
     .toArray();
-  return docs.map((d) => d._id!);
+  return docs.map((d) => ({ id: d._id!.toString(), filename: d.filename }));
 }

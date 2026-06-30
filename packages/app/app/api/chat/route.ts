@@ -18,7 +18,7 @@ import {
 } from "@/lib/chat/conversations";
 import {
   associatePendingDocuments,
-  getRetrievableDocumentIds,
+  getRetrievableDocuments,
 } from "@/lib/documents";
 import { generateTitle } from "@/lib/chat/titleGen";
 import { type ClaudiusUIMessage, ChatRequestSchema } from "@/lib/chat/types";
@@ -88,9 +88,12 @@ export const POST = auth(async (req) => {
     if (documentIds && documentIds.length > 0) {
       await associatePendingDocuments(userId, conversationObjId, documentIds);
     }
-    const attachedDocumentIds = (
-      await getRetrievableDocumentIds(userId, conversationObjId)
-    ).map((id) => id.toString());
+    const attachedDocs = await getRetrievableDocuments(
+      userId,
+      conversationObjId,
+    );
+    const attachedDocumentIds = attachedDocs.map((d) => d.id);
+    const attachedDocumentNames = attachedDocs.map((d) => d.filename);
 
     const graph = await getChatGraph();
 
@@ -124,6 +127,7 @@ export const POST = auth(async (req) => {
               inferenceProfileId: grant.inferenceProfileId,
               userId: userId.toString(),
               attachedDocumentIds,
+              attachedDocumentNames,
             },
             signal: req.signal,
           },

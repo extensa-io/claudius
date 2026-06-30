@@ -22,3 +22,15 @@ question could be answered from the attached material. When you answer from
 retrieved excerpts, cite the document name and its location (for example the page
 number) so the user can verify the source. Only cite documents and locations
 that appear in the retrieved results; never invent them.`;
+
+/**
+ * Appended to the system prompt for a turn when the conversation has attached,
+ * embedded documents. Without this, the model has no signal that files are
+ * present — it only sees the tool definition — so it tends to ask the user to
+ * upload a document that is already attached instead of calling the tool. Naming
+ * the files explicitly is what makes the model reliably reach for retrieval.
+ */
+export function attachedDocumentsNote(filenames: string[]): string {
+  const list = filenames.length > 0 ? filenames.join(", ") : "one or more files";
+  return `The user has already attached the following document(s) to THIS conversation: ${list}. They are available to you right now through the retrieve_documents tool. When the user's question may relate to them, call retrieve_documents to read the relevant passages before answering, and cite the document name and location. Never claim that no document is attached, and never ask the user to upload a document that is already listed here.`;
+}

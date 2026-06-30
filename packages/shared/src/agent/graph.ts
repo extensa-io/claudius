@@ -10,7 +10,7 @@ import {
 import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
 import { getCheckpointer } from "./checkpointer";
 import { buildChatModel } from "./model";
-import { SYSTEM_PROMPT } from "./prompts";
+import { attachedDocumentsNote, SYSTEM_PROMPT } from "./prompts";
 import { baseTools, documentTools, tools } from "./tools";
 
 /**
@@ -34,6 +34,11 @@ export interface ChatGraphConfigurable {
    * exactly these documents; empty (or absent) means no document RAG this turn.
    */
   attachedDocumentIds?: string[];
+  /**
+   * Filenames of those attached documents, injected into the system prompt so
+   * the model knows files are present and reliably calls retrieve_documents.
+   */
+  attachedDocumentNames?: string[];
 }
 
 function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
@@ -66,14 +71,21 @@ async function agent(
   state: typeof MessagesAnnotation.State,
   config: RunnableConfig,
 ): Promise<typeof MessagesAnnotation.Update> {
-  const { inferenceProfileId, maxTokens, attachedDocumentIds } =
+  const { inferenceProfileId, maxTokens, attachedDocumentIds, attachedDocumentNames } =
     readConfigurable(config);
   // Offer retrieve_documents only when this conversation actually has embedded
   // documents, so the model never reaches for document search on a plain chat.
-  const boundTools =
-    attachedDocumentIds && attachedDocumentIds.length > 0
-      ? [...baseTools, ...documentTools]
-      : baseTools;
+  const hasDocuments =
+    attachedDocumentIds !== undefined && attachedDocumentIds.length > 0;
+  const boundTools = hasDocuments
+    ? [...baseTools, ...documentTools]
+    : baseTools;
+  // When documents are attached, tell the model so in the system prompt — the
+  // tool definition alone is too weak a signal and the model otherwise asks the
+  // user to upload a file that is already attached.
+  const systemPrompt = hasDocuments
+    ? `${SYSTEM_PROMPT}\n\n${attachedDocumentsNote(attachedDocumentNames ?? [])}`
+    : SYSTEM_PROMPT;
   // exactOptionalPropertyTypes: only pass maxTokens when it's actually set,
   // rather than handing the builder an explicit `undefined`.
   const model = buildChatModel(
@@ -82,7 +94,7 @@ async function agent(
   ).bindTools(boundTools);
 
   const response = await model.invoke(
-    [new SystemMessage(SYSTEM_PROMPT), ...state.messages],
+    [new SystemMessage(systemPrompt), ...state.messages],
     config,
   );
 
