@@ -1,10 +1,12 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
+import { get } from "@vercel/blob";
 import mammoth from "mammoth";
 import type { ObjectId } from "mongodb";
 import { extractText } from "unpdf";
 import { chunksCol, documentsCol } from "../db/collections";
 import type { Chunk, DocumentRecord } from "../db/schemas";
 import { embedTexts } from "../embeddings/voyage";
+import { env } from "../env";
 import {
   classifyDocument,
   MAX_CHUNKS_PER_DOCUMENT,
@@ -51,11 +53,18 @@ async function setStatus(
 }
 
 async function fetchBytes(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Could not fetch the uploaded file (${res.status}).`);
+  // The blob is in a PRIVATE store, so a plain fetch of its URL is forbidden;
+  // we read it server-side with the SDK's authenticated get(). Private storage
+  // is deliberate — these are user documents and must never be publicly fetchable
+  // by URL (the app's per-user isolation extends to the raw files, not just chunks).
+  const result = await get(url, {
+    access: "private",
+    token: env.BLOB_READ_WRITE_TOKEN,
+  });
+  if (!result?.stream) {
+    throw new Error("Could not fetch the uploaded file.");
   }
-  const buf = await res.arrayBuffer();
+  const buf = await new Response(result.stream).arrayBuffer();
   if (buf.byteLength > MAX_DOCUMENT_BYTES) {
     throw new Error("File exceeds the 20 MB limit.");
   }

@@ -144,7 +144,9 @@ export function useDocuments({
 
       try {
         const blob = await upload(file.name, file, {
-          access: "public",
+          // Private store: documents must not be publicly fetchable by URL. The
+          // parse pipeline reads them server-side with the SDK's authenticated get().
+          access: "private",
           handleUploadUrl: "/api/blob/upload",
           contentType: contentTypeFor(file.name),
           onUploadProgress: ({ percentage }) =>
