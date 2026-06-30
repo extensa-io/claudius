@@ -4,11 +4,13 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { PanelLeft } from "lucide-react";
 import { useMemo } from "react";
+import type { Role } from "@claudius/shared";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
-import type { ModelOption } from "@/lib/chat/view-types";
+import type { DocumentView, ModelOption } from "@/lib/chat/view-types";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
 import { ModelSelector } from "./model-selector";
+import { useDocuments } from "./use-documents";
 
 /**
  * Owns the live chat session for one conversation. The parent remounts this
@@ -19,6 +21,8 @@ import { ModelSelector } from "./model-selector";
 export function ChatPane({
   conversationId,
   initialMessages,
+  initialDocuments,
+  role,
   modelId,
   models,
   onModelChange,
@@ -28,6 +32,8 @@ export function ChatPane({
 }: {
   conversationId: string | null;
   initialMessages: ClaudiusUIMessage[];
+  initialDocuments: DocumentView[];
+  role: Role;
   modelId: string;
   models: ModelOption[];
   onModelChange: (id: string) => void;
@@ -35,6 +41,8 @@ export function ChatPane({
   onTurnComplete: () => void;
   onOpenSidebar: () => void;
 }): React.ReactNode {
+  const canAttach = role !== "guest";
+  const documents = useDocuments({ conversationId, initialDocuments });
   const transport = useMemo(
     () =>
       new DefaultChatTransport<ClaudiusUIMessage>({
@@ -64,6 +72,7 @@ export function ChatPane({
               conversationId: body?.conversationId ?? null,
               modelId: body?.modelId,
               text,
+              documentIds: body?.documentIds,
             },
           };
         },
@@ -80,7 +89,12 @@ export function ChatPane({
           onConversationCreated(part.data.id, part.data.title);
         }
       },
-      onFinish: () => onTurnComplete(),
+      onFinish: () => {
+        // Pending documents were associated to the conversation by this turn;
+        // they no longer need to be re-sent.
+        documents.clearPending();
+        onTurnComplete();
+      },
     });
 
   const busy = status === "submitted" || status === "streaming";
@@ -89,7 +103,16 @@ export function ChatPane({
     messages[messages.length - 1]?.role === "user";
 
   const send = (text: string): void => {
-    void sendMessage({ text }, { body: { conversationId, modelId } });
+    void sendMessage(
+      { text },
+      {
+        body: {
+          conversationId,
+          modelId,
+          documentIds: documents.pendingDocumentIds,
+        },
+      },
+    );
   };
 
   const isEmpty = messages.length === 0;
@@ -133,7 +156,16 @@ export function ChatPane({
         </div>
       )}
 
-      <Composer onSend={send} onStop={stop} busy={busy} />
+      <Composer
+        onSend={send}
+        onStop={stop}
+        busy={busy}
+        canAttach={canAttach}
+        chips={documents.chips}
+        onUploadFiles={documents.uploadFiles}
+        onRetryDoc={documents.retry}
+        onRemoveDoc={documents.remove}
+      />
     </div>
   );
 }

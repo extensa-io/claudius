@@ -17,6 +17,10 @@ export const DocumentSchema = z.object({
   status: z.enum(["uploaded", "parsed", "embedded", "failed"]),
   conversationId: zObjectId.nullable(),
   createdAt: z.date(),
+  // Only present when status is "failed": a short, user-safe reason shown on the
+  // document chip with a retry. Omitted otherwise so a successful re-parse leaves
+  // no stale error behind.
+  failureReason: z.string().optional(),
 });
 
 export type DocumentRecord = z.infer<typeof DocumentSchema>;

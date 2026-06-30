@@ -14,6 +14,8 @@ const VALID_ENV: Record<string, string> = {
   AWS_REGION: "us-east-1",
   ADMIN_EMAIL: "admin@example.com",
   TAVILY_API_KEY: "tvly-test",
+  VOYAGE_API_KEY: "pa-test",
+  BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_test",
 };
 
 const ORIGINAL_ENV = process.env;

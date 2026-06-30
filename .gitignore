@@ -1,6 +1,7 @@
 .idea
 .resources
 specs
+outputs
 
 .env
 

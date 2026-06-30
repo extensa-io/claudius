@@ -6,6 +6,8 @@ import { auth } from "@/lib/auth";
 import { getOwnedConversation, listConversations } from "@/lib/chat/conversations";
 import { toUIMessages } from "@/lib/chat/messages";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
+import type { DocumentView } from "@/lib/chat/view-types";
+import { listConversationDocuments } from "@/lib/documents";
 
 // Node runtime: this page reaches Mongo and the checkpointer directly.
 export const runtime = "nodejs";
@@ -37,10 +39,15 @@ export default async function ChatPage({
 
   let initialConversationId: string | null = null;
   let initialMessages: ClaudiusUIMessage[] = [];
+  let initialDocuments: DocumentView[] = [];
   if (c) {
     const conversation = await getOwnedConversation(userId, c);
     if (conversation) {
       initialConversationId = c;
+      initialDocuments = await listConversationDocuments(
+        userId,
+        conversation._id!,
+      );
       try {
         initialMessages = toUIMessages(await loadThreadMessages(c));
       } catch (err) {
@@ -66,6 +73,7 @@ export default async function ChatPage({
       models={models}
       initialConversationId={initialConversationId}
       initialMessages={initialMessages}
+      initialDocuments={initialDocuments}
     />
   );
 }

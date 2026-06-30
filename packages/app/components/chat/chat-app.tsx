@@ -1,13 +1,18 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import type { Role } from "@claudius/shared";
 import {
   Sheet,
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
-import type { ConversationSummary, ModelOption } from "@/lib/chat/view-types";
+import type {
+  ConversationSummary,
+  DocumentView,
+  ModelOption,
+} from "@/lib/chat/view-types";
 import { ChatPane } from "./chat-pane";
 import { Sidebar, type SidebarUser } from "./sidebar";
 
@@ -24,12 +29,14 @@ export function ChatApp({
   models,
   initialConversationId,
   initialMessages,
+  initialDocuments,
 }: {
   user: SidebarUser;
   initialConversations: ConversationSummary[];
   models: ModelOption[];
   initialConversationId: string | null;
   initialMessages: ClaudiusUIMessage[];
+  initialDocuments: DocumentView[];
 }): React.ReactNode {
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState<string | null>(
@@ -37,6 +44,8 @@ export function ChatApp({
   );
   const [seedMessages, setSeedMessages] =
     useState<ClaudiusUIMessage[]>(initialMessages);
+  const [seedDocuments, setSeedDocuments] =
+    useState<DocumentView[]>(initialDocuments);
   const [paneKey, setPaneKey] = useState<string>(
     initialConversationId ?? "new-0",
   );
@@ -70,8 +79,10 @@ export function ChatApp({
       const data = (await res.json()) as {
         conversation: ConversationSummary;
         messages: ClaudiusUIMessage[];
+        documents: DocumentView[];
       };
       setSeedMessages(data.messages);
+      setSeedDocuments(data.documents);
       setActiveId(id);
       setModelId(
         models.some((m) => m.id === data.conversation.modelId)
@@ -88,6 +99,7 @@ export function ChatApp({
     setSidebarOpen(false);
     setActiveId(null);
     setSeedMessages([]);
+    setSeedDocuments([]);
     newCounter.current += 1;
     setPaneKey(`new-${newCounter.current}`);
     setUrl(null);
@@ -167,6 +179,8 @@ export function ChatApp({
           key={paneKey}
           conversationId={activeId}
           initialMessages={seedMessages}
+          initialDocuments={seedDocuments}
+          role={user.role as Role}
           modelId={modelId}
           models={models}
           onModelChange={setModelId}

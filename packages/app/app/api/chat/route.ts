@@ -16,6 +16,10 @@ import {
   getOwnedConversation,
   touchConversation,
 } from "@/lib/chat/conversations";
+import {
+  associatePendingDocuments,
+  getRetrievableDocumentIds,
+} from "@/lib/documents";
 import { generateTitle } from "@/lib/chat/titleGen";
 import { type ClaudiusUIMessage, ChatRequestSchema } from "@/lib/chat/types";
 import { errorResponse } from "@/lib/http";
@@ -52,7 +56,7 @@ export const POST = auth(async (req) => {
       new AppError("invalid_input", "Invalid chat request."),
     );
   }
-  const { conversationId, modelId, text } = parsed.data;
+  const { conversationId, modelId, text, documentIds } = parsed.data;
 
   try {
     // 1. Verify ownership of an existing conversation BEFORE consuming anything,
@@ -76,6 +80,17 @@ export const POST = auth(async (req) => {
     const conversationObjId = conversation._id!;
     const threadId = conversationObjId.toString();
     const conversationTitle = conversation.title;
+
+    // Associate any documents uploaded before this conversation existed (only
+    // the user's own, still-pending ones — see associatePendingDocuments), then
+    // resolve the conversation's embedded documents to scope retrieval. The
+    // agent is offered retrieve_documents only when this list is non-empty.
+    if (documentIds && documentIds.length > 0) {
+      await associatePendingDocuments(userId, conversationObjId, documentIds);
+    }
+    const attachedDocumentIds = (
+      await getRetrievableDocumentIds(userId, conversationObjId)
+    ).map((id) => id.toString());
 
     const graph = await getChatGraph();
 
@@ -107,6 +122,8 @@ export const POST = auth(async (req) => {
             configurable: {
               thread_id: threadId,
               inferenceProfileId: grant.inferenceProfileId,
+              userId: userId.toString(),
+              attachedDocumentIds,
             },
             signal: req.signal,
           },

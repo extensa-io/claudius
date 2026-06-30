@@ -34,6 +34,10 @@ export const ChatRequestSchema = z.object({
   conversationId: z.string().min(1).nullish(),
   modelId: z.string().min(1),
   text: z.string().min(1).max(32_000),
+  // Pending attachments uploaded before the conversation existed. The route
+  // associates these to the conversation (only the user's own, still-pending
+  // ones) before the turn runs. Bounded to keep the payload sane.
+  documentIds: z.array(z.string().min(1)).max(20).optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;

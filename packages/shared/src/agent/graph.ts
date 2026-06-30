@@ -11,7 +11,7 @@ import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
 import { getCheckpointer } from "./checkpointer";
 import { buildChatModel } from "./model";
 import { SYSTEM_PROMPT } from "./prompts";
-import { tools } from "./tools";
+import { baseTools, documentTools, tools } from "./tools";
 
 /**
  * Per-invocation graph configuration, passed through `configurable`. The model
@@ -26,6 +26,14 @@ export interface ChatGraphConfigurable {
   /** Bedrock inference profile resolved by assertCanInvoke. */
   inferenceProfileId: string;
   maxTokens?: number;
+  /** Owner id; required by retrieve_documents to pre-filter its vector search. */
+  userId?: string;
+  /**
+   * The conversation's attached, embedded document ids. When non-empty the agent
+   * is offered the retrieve_documents tool and the tool scopes its search to
+   * exactly these documents; empty (or absent) means no document RAG this turn.
+   */
+  attachedDocumentIds?: string[];
 }
 
 function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
@@ -58,13 +66,20 @@ async function agent(
   state: typeof MessagesAnnotation.State,
   config: RunnableConfig,
 ): Promise<typeof MessagesAnnotation.Update> {
-  const { inferenceProfileId, maxTokens } = readConfigurable(config);
+  const { inferenceProfileId, maxTokens, attachedDocumentIds } =
+    readConfigurable(config);
+  // Offer retrieve_documents only when this conversation actually has embedded
+  // documents, so the model never reaches for document search on a plain chat.
+  const boundTools =
+    attachedDocumentIds && attachedDocumentIds.length > 0
+      ? [...baseTools, ...documentTools]
+      : baseTools;
   // exactOptionalPropertyTypes: only pass maxTokens when it's actually set,
   // rather than handing the builder an explicit `undefined`.
   const model = buildChatModel(
     inferenceProfileId,
     maxTokens !== undefined ? { maxTokens } : {},
-  ).bindTools(tools);
+  ).bindTools(boundTools);
 
   const response = await model.invoke(
     [new SystemMessage(SYSTEM_PROMPT), ...state.messages],

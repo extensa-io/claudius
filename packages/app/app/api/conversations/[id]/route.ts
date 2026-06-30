@@ -9,6 +9,7 @@ import {
   toSummary,
 } from "@/lib/chat/conversations";
 import { toUIMessages } from "@/lib/chat/messages";
+import { listConversationDocuments } from "@/lib/documents";
 import { errorResponse } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -42,8 +43,15 @@ export async function GET(
       throw new AppError("not_found", "Conversation not found.");
     }
 
-    const messages = toUIMessages(await loadThreadMessages(id));
-    return Response.json({ conversation: toSummary(conversation), messages });
+    const [messages, documents] = await Promise.all([
+      loadThreadMessages(id).then(toUIMessages),
+      listConversationDocuments(userId, conversation._id!),
+    ]);
+    return Response.json({
+      conversation: toSummary(conversation),
+      messages,
+      documents,
+    });
   } catch (err) {
     return errorResponse(err);
   }

@@ -22,6 +22,9 @@ const EnvSchema = z.object({
   ADMIN_EMAIL: z.string().email(),
   // Phase 1: Tavily powers the agent's web_search tool.
   TAVILY_API_KEY: z.string().min(1),
+  // Phase 2: Voyage embeds document chunks; Vercel Blob stores the raw files.
+  VOYAGE_API_KEY: z.string().min(1),
+  BLOB_READ_WRITE_TOKEN: z.string().min(1),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

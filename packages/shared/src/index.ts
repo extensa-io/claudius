@@ -9,6 +9,19 @@ export * from "./db/collections";
 export * from "./db/schemas";
 export { applyIndexes } from "./db/indexes";
 export { bedrockHealthProbe, type BedrockHealth } from "./bedrock/health";
+export {
+  embedTexts,
+  embedQuery,
+  EMBEDDING_DIMENSIONS,
+} from "./embeddings/voyage";
+export {
+  MAX_DOCUMENT_BYTES,
+  MAX_CHUNKS_PER_DOCUMENT,
+  ALLOWED_UPLOAD_CONTENT_TYPES,
+  classifyDocument,
+  type DocumentKind,
+} from "./documents/constants";
+export { parseAndEmbedDocument } from "./documents/parse";
 export * from "./agent";
 export * from "./tiers";
 export * from "./usage";
