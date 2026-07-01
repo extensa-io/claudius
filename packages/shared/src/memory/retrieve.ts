@@ -7,12 +7,28 @@ import type { RetrievedMemory } from "./types";
  * Retrieval for the graph's `load_context` node: the user's most relevant
  * non-superseded memories for the incoming message.
  *
- * Owner isolation is a PRE-filter inside $vectorSearch (invariant #1). The
- * similarity floor matters as much as top-k: below it we return nothing rather
- * than pad the prompt with weakly related memories, so a question about cooking
- * doesn't drag in a memory about the user's editor. Retrieved memories have
- * their `lastAccessedAt` bumped, which is also the signal the cap evictor uses
- * to decide what's stale.
+ * Owner isolation is a PRE-filter inside $vectorSearch (invariant #1). Retrieved
+ * memories have their `lastAccessedAt` bumped, which is also the signal the cap
+ * evictor uses to decide what's stale.
+ *
+ * CALIBRATION (post-Phase-3): the original design gated retrieval behind an
+ * absolute 0.62 floor and injected nothing below it. Live measurement showed
+ * that floor was calibrated on the wrong distribution — it was tuned against
+ * declarative-vs-declarative supersession scores (0.77–0.97), but real retrieval
+ * scores a user's QUESTION against stored declarative facts, and those cluster
+ * in 0.58–0.67. A 0.62 floor bisected the actual signal, so identity questions
+ * ("who am I?") dropped every memory and the model answered with confident
+ * amnesia. Two changes here, both deliberately favouring recall over precision:
+ *
+ *   1. MIN_SCORE lowered to 0.55, below the measured relevant cluster.
+ *   2. MIN_INJECT: if fewer than this clears the floor, we still return the top
+ *      few by score. A retrieval miss must never mean the model is fully blind
+ *      to who it is talking to — better a weakly-related fact than amnesia.
+ *
+ * This is a calibration, not a cure. Because scores across a user's memories are
+ * compressed into a narrow band, top-k ordering is noisy and a defining fact can
+ * still rank below a trivial one on an awkwardly phrased query. The structural
+ * fix — salience-weighted retrieval and an always-on profile — is Phase 6.
  */
 
 const TOP_K = 5;
@@ -23,9 +39,19 @@ const SEARCH_LIMIT = 15;
 
 /**
  * Atlas normalizes cosine to (1 + cosine) / 2: 0.5 is unrelated, 1.0 identical.
- * 0.62 keeps clearly-related memories and drops the merely-adjacent. Tune here.
+ * 0.55 sits just below the measured 0.58–0.67 band of a question against this
+ * user's stored facts: it keeps related memories and drops only true noise. Tune
+ * here, and re-measure with `db/scripts/diagnose-memory.ts` after any change.
  */
-const MIN_SCORE = 0.62;
+const MIN_SCORE = 0.55;
+
+/**
+ * The never-blind floor. When fewer than this many memories clear MIN_SCORE, we
+ * still return the highest-scoring few rather than nothing, so the model always
+ * has *some* grounding in who the user is. Set to 0 to restore the strict
+ * "inject nothing below the floor" behaviour.
+ */
+const MIN_INJECT = 3;
 
 interface MemoryHit {
   _id: ObjectId;
@@ -44,7 +70,10 @@ export async function retrieveMemories(
   const queryVector = await embedQuery(trimmed);
   const col = await memoriesCol();
 
-  const hits = (await col
+  // Fetch scored candidates (owner-prefiltered, non-superseded) and apply the
+  // floor in code rather than in the pipeline, so the never-blind fallback can
+  // reach below MIN_SCORE when nothing clears it. Sorted by score descending.
+  const scored = (await col
     .aggregate([
       {
         $vectorSearch: {
@@ -57,11 +86,19 @@ export async function retrieveMemories(
         },
       },
       { $addFields: { score: { $meta: "vectorSearchScore" } } },
-      { $match: { supersededBy: null, score: { $gte: MIN_SCORE } } },
-      { $limit: TOP_K },
+      { $match: { supersededBy: null } },
+      { $sort: { score: -1 } },
       { $project: { _id: 1, content: 1, category: 1, score: 1 } },
     ])
     .toArray()) as MemoryHit[];
+
+  const aboveFloor = scored
+    .filter((h) => h.score >= MIN_SCORE)
+    .slice(0, TOP_K);
+  // Enough cleared the floor: use them. Otherwise fall back to the top few by
+  // score so a thin or awkwardly-phrased query never yields zero memories.
+  const hits =
+    aboveFloor.length >= MIN_INJECT ? aboveFloor : scored.slice(0, MIN_INJECT);
 
   if (hits.length === 0) return [];
 
