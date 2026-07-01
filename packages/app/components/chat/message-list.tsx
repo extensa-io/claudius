@@ -2,8 +2,9 @@
 
 import type { DynamicToolUIPart } from "ai";
 import { useEffect, useRef } from "react";
-import type { ClaudiusUIMessage } from "@/lib/chat/types";
+import type { ClaudiusUIMessage, UsedMemory } from "@/lib/chat/types";
 import { Markdown } from "./markdown";
+import { MemoryUsedChip } from "./memory-used-chip";
 import { ToolActivity } from "./tool-activity";
 
 /**
@@ -73,6 +74,16 @@ export function MessageList({
                 }
                 return null;
               })}
+              {/* Footer chip: which memories informed this turn (if any). */}
+              {(() => {
+                const used = message.parts.find(
+                  (p): p is { type: "data-memories"; data: { memories: UsedMemory[] } } =>
+                    p.type === "data-memories",
+                );
+                return used ? (
+                  <MemoryUsedChip memories={used.data.memories} />
+                ) : null;
+              })()}
             </div>
           ),
         )}

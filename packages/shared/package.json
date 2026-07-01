@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "db:indexes": "tsx --env-file=../../.env src/db/scripts/create-indexes.ts",
-    "db:seed": "tsx --env-file=../../.env src/db/scripts/seed.ts"
+    "db:seed": "tsx --env-file=../../.env src/db/scripts/seed.ts",
+    "db:migrate:memory": "tsx --env-file=../../.env src/db/scripts/migrate-phase3-memory.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -34,3 +34,22 @@ export function attachedDocumentsNote(filenames: string[]): string {
   const list = filenames.length > 0 ? filenames.join(", ") : "one or more files";
   return `The user has already attached the following document(s) to THIS conversation: ${list}. They are available to you right now through the retrieve_documents tool. When the user's question may relate to them, call retrieve_documents to read the relevant passages before answering, and cite the document name and location. Never claim that no document is attached, and never ask the user to upload a document that is already listed here.`;
 }
+
+/**
+ * The delimited memory section prepended to the system prompt when
+ * `load_context` retrieved memories for this turn (Phase 3). It is built fresh
+ * each turn and never checkpointed, so it can't accumulate across the thread.
+ * The instruction is deliberately soft: use what's relevant, ignore the rest,
+ * and don't announce the mechanism — the "used N memories" chip is where recall
+ * is surfaced to the user, not the prose.
+ */
+export function memoriesNote(
+  memories: Array<{ content: string; category: string }>,
+): string {
+  const lines = memories.map((m) => `- (${m.category}) ${m.content}`).join("\n");
+  return `Here is what you remember about this user from past conversations. Use anything relevant to personalize your answer; ignore anything that isn't. Do not mention that you are drawing on stored memories unless the user asks.
+
+<user_memory>
+${lines}
+</user_memory>`;
+}

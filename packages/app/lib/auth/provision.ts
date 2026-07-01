@@ -30,6 +30,9 @@ export async function provisionUser(
         dailyMessageCount: {
           $ifNull: ["$dailyMessageCount", { count: 0, resetsAt }],
         },
+        // Long-term memory is on by default; never overwrite a user who has
+        // since turned it off via the /memories toggle.
+        memoryEnabled: { $ifNull: ["$memoryEnabled", true] },
       },
     },
   ]);

@@ -24,6 +24,13 @@ export const UserSchema = z.object({
     resetsAt: z.date(),
   }),
   status: z.enum(["active", "disabled"]),
+  /**
+   * The user's long-term memory master switch (Phase 3). When false, Claudius
+   * neither extracts new memories from this user's conversations nor retrieves
+   * any in `load_context` — the feature is fully off for them. Defaults to true
+   * at provisioning; the `/memories` toggle flips it.
+   */
+  memoryEnabled: z.boolean(),
 });
 
 export type User = z.infer<typeof UserSchema>;

@@ -18,6 +18,11 @@ export interface InvokeGrant {
   inferenceProfileId: string;
   displayName: string;
   role: Role;
+  /**
+   * The user's long-term memory switch, surfaced here so the chat route can pass
+   * it into the graph's load_context without a second user lookup (Phase 3).
+   */
+  memoryEnabled: boolean;
 }
 
 export interface AssertCanInvokeOptions {
@@ -98,5 +103,8 @@ export async function assertCanInvoke(
     inferenceProfileId: entry.inferenceProfileId,
     displayName: entry.displayName,
     role: user.role,
+    // memoryEnabled predates Phase 3 for some rows; treat a missing flag as on,
+    // matching the provisioning default and the migration backfill.
+    memoryEnabled: user.memoryEnabled ?? true,
   };
 }

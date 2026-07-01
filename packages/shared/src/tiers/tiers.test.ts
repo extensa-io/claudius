@@ -48,6 +48,7 @@ function makeUser(overrides: Partial<User>): User {
     monthlyTokenBudget: null,
     dailyMessageCount: { count: 0, resetsAt: new Date() },
     status: "active",
+    memoryEnabled: true,
     ...overrides,
   };
 }

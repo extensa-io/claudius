@@ -58,7 +58,7 @@ const allowlist: AllowlistSettings = {
 
 const tiers: TiersSettings = {
   _id: "tiers",
-  guest: { dailyMessageCap: 10, memoryCap: 0, features: ["chat"] },
+  guest: { dailyMessageCap: 10, memoryCap: 20, features: ["chat", "memory"] },
   member: {
     dailyMessageCap: 200,
     memoryCap: 500,

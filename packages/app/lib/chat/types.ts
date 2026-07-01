@@ -13,10 +13,26 @@ export interface ConversationDataPart {
   title: string;
 }
 
-/** Claudius's UIMessage shape: no metadata, one custom `data-conversation` part. */
+/** A single memory the agent recalled this turn, for the "used" chip. */
+export interface UsedMemory {
+  id: string;
+  content: string;
+  category: "fact" | "preference" | "context";
+}
+
+/**
+ * Emitted once by `load_context` (via the graph's `memories_used` custom event)
+ * when memories informed the answer. Written as a NON-transient part so it lives
+ * on the assistant message and renders as a footer chip under that turn.
+ */
+export interface MemoriesDataPart {
+  memories: UsedMemory[];
+}
+
+/** Claudius's UIMessage shape: no metadata, two custom data parts. */
 export type ClaudiusUIMessage = UIMessage<
   never,
-  { conversation: ConversationDataPart }
+  { conversation: ConversationDataPart; memories: MemoriesDataPart }
 >;
 
 export type ClaudiusStreamWriter = UIMessageStreamWriter<ClaudiusUIMessage>;

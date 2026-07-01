@@ -128,6 +128,8 @@ export const POST = auth(async (req) => {
               userId: userId.toString(),
               attachedDocumentIds,
               attachedDocumentNames,
+              // load_context skips retrieval entirely when memory is off.
+              memoryEnabled: grant.memoryEnabled,
             },
             signal: req.signal,
           },

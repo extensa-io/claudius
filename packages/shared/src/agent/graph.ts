@@ -1,17 +1,43 @@
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import type { BaseMessage } from "@langchain/core/messages";
 import { SystemMessage } from "@langchain/core/messages";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import {
+  Annotation,
   END,
   MessagesAnnotation,
   START,
   StateGraph,
 } from "@langchain/langgraph";
 import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
+import { ObjectId } from "mongodb";
+import { retrieveMemories } from "../memory/retrieve";
 import { getCheckpointer } from "./checkpointer";
 import { buildChatModel } from "./model";
-import { attachedDocumentsNote, SYSTEM_PROMPT } from "./prompts";
+import { attachedDocumentsNote, memoriesNote, SYSTEM_PROMPT } from "./prompts";
 import { baseTools, documentTools, tools } from "./tools";
+
+/**
+ * The chat graph's state: the message channel, plus an ephemeral `memoryContext`
+ * holding the memory block retrieved for the CURRENT turn. It uses a
+ * replace-reducer and is overwritten every turn, so retrieved memories never
+ * accumulate in the checkpointed transcript — the alternative (injecting a
+ * SystemMessage into `messages`) would pile up a stale memory block per turn.
+ * `load_context` fills it; the `agent` node reads it into a fresh, non-persisted
+ * system prompt.
+ */
+const GraphAnnotation = Annotation.Root({
+  ...MessagesAnnotation.spec,
+  memoryContext: Annotation<string>({
+    reducer: (_prev, next) => next,
+    default: () => "",
+  }),
+});
+type GraphState = typeof GraphAnnotation.State;
+type GraphUpdate = typeof GraphAnnotation.Update;
+
+/** Custom-event name carrying the memories used this turn, for the UI chip. */
+export const MEMORIES_USED_EVENT = "memories_used";
 
 /**
  * Per-invocation graph configuration, passed through `configurable`. The model
@@ -39,6 +65,12 @@ export interface ChatGraphConfigurable {
    * the model knows files are present and reliably calls retrieve_documents.
    */
   attachedDocumentNames?: string[];
+  /**
+   * The user's memory master switch. When false, `load_context` retrieves
+   * nothing — memory is fully off for this user (Phase 3). Absent is treated as
+   * enabled, matching the provisioning default.
+   */
+  memoryEnabled?: boolean;
 }
 
 function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
@@ -52,13 +84,41 @@ function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
 }
 
 /**
- * `load_context`: a pass-through this phase. Phase 3 wires memory retrieval in
- * here — it will load the user's relevant memories and prepend them as context
- * ahead of the system prompt. For now it makes no state change, but it keeps the
- * graph topology stable so adding memory later is a node change, not a rewire.
+ * `load_context`: retrieve the user's relevant long-term memories for this turn
+ * and stash them in `memoryContext` for the agent node to inject. When memory is
+ * off for the user, or nothing clears the similarity floor, it clears the
+ * channel and injects nothing (never pad). On a hit it also dispatches a custom
+ * event so the route can surface the "used N memories" chip in real time.
+ *
+ * Retrieval failures are swallowed to an empty context: a memory lookup must
+ * never break a chat turn.
  */
-async function loadContext(): Promise<typeof MessagesAnnotation.Update> {
-  return {};
+async function loadContext(
+  state: GraphState,
+  config: RunnableConfig,
+): Promise<GraphUpdate> {
+  const { userId, memoryEnabled } = readConfigurable(config);
+  if (!userId || memoryEnabled === false) return { memoryContext: "" };
+
+  // The latest human message is what we retrieve against.
+  const lastHuman = [...state.messages]
+    .reverse()
+    .find((m) => m.getType() === "human");
+  const text = lastHuman?.text?.trim() ?? "";
+  if (text.length === 0) return { memoryContext: "" };
+
+  try {
+    const memories = await retrieveMemories(new ObjectId(userId), text);
+    if (memories.length === 0) return { memoryContext: "" };
+    await dispatchCustomEvent(MEMORIES_USED_EVENT, { memories }, config);
+    return { memoryContext: memoriesNote(memories) };
+  } catch (err) {
+    console.error(
+      "Memory retrieval failed in load_context:",
+      err instanceof Error ? `${err.name}: ${err.message}` : err,
+    );
+    return { memoryContext: "" };
+  }
 }
 
 /**
@@ -68,9 +128,9 @@ async function loadContext(): Promise<typeof MessagesAnnotation.Update> {
  * forwarding is what lets the route observe streamed tokens via streamEvents.
  */
 async function agent(
-  state: typeof MessagesAnnotation.State,
+  state: GraphState,
   config: RunnableConfig,
-): Promise<typeof MessagesAnnotation.Update> {
+): Promise<GraphUpdate> {
   const { inferenceProfileId, maxTokens, attachedDocumentIds, attachedDocumentNames } =
     readConfigurable(config);
   // Offer retrieve_documents only when this conversation actually has embedded
@@ -80,12 +140,16 @@ async function agent(
   const boundTools = hasDocuments
     ? [...baseTools, ...documentTools]
     : baseTools;
-  // When documents are attached, tell the model so in the system prompt — the
-  // tool definition alone is too weak a signal and the model otherwise asks the
-  // user to upload a file that is already attached.
-  const systemPrompt = hasDocuments
-    ? `${SYSTEM_PROMPT}\n\n${attachedDocumentsNote(attachedDocumentNames ?? [])}`
-    : SYSTEM_PROMPT;
+  // Build the system prompt fresh each turn from three parts, none persisted:
+  // the base identity, the memory block load_context retrieved (if any), and the
+  // attached-documents note (if any). Memory comes before the docs note so the
+  // model reads durable user context before task-specific material.
+  const sections = [SYSTEM_PROMPT];
+  if (state.memoryContext.length > 0) sections.push(state.memoryContext);
+  if (hasDocuments) {
+    sections.push(attachedDocumentsNote(attachedDocumentNames ?? []));
+  }
+  const systemPrompt = sections.join("\n\n");
   // exactOptionalPropertyTypes: only pass maxTokens when it's actually set,
   // rather than handing the builder an explicit `undefined`.
   const model = buildChatModel(
@@ -101,7 +165,7 @@ async function agent(
   return { messages: [response] };
 }
 
-const builder = new StateGraph(MessagesAnnotation)
+const builder = new StateGraph(GraphAnnotation)
   .addNode("load_context", loadContext)
   .addNode("agent", agent)
   .addNode("tools", new ToolNode(tools))
@@ -144,8 +208,6 @@ export async function loadThreadMessages(
   const snapshot = await graph.getState({
     configurable: { thread_id: threadId },
   });
-  const values = snapshot.values as
-    | typeof MessagesAnnotation.State
-    | undefined;
+  const values = snapshot.values as GraphState | undefined;
   return values?.messages ?? [];
 }

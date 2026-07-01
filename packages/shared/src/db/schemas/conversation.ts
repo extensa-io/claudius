@@ -24,6 +24,18 @@ export const ConversationSchema = z.object({
   // truncated copy here is the classic "store what you render" tradeoff.
   lastMessagePreview: z.string().optional(),
   expiresAt: z.date().optional(),
+  /**
+   * Memory-extraction watermark (Phase 3). `lastRunAt` is when extraction last
+   * processed this thread; `messageCount` is how many checkpointed messages had
+   * been seen by then, so the next run extracts only the turns beyond it rather
+   * than re-reading the whole transcript. Absent until the first extraction runs.
+   */
+  extraction: z
+    .object({
+      lastRunAt: z.date(),
+      messageCount: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 
 export type Conversation = z.infer<typeof ConversationSchema>;

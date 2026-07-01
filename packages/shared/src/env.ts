@@ -25,6 +25,9 @@ const EnvSchema = z.object({
   // Phase 2: Voyage embeds document chunks; Vercel Blob stores the raw files.
   VOYAGE_API_KEY: z.string().min(1),
   BLOB_READ_WRITE_TOKEN: z.string().min(1),
+  // Phase 3: shared secret Vercel Cron sends as `Authorization: Bearer` so the
+  // memory-extraction cron route can reject any request it did not schedule.
+  CRON_SECRET: z.string().min(1),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

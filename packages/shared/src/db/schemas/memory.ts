@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { zObjectId } from "./common";
 
+/** The three kinds of thing Claudius remembers. Single source for the enum. */
+export const MemoryCategorySchema = z.enum(["fact", "preference", "context"]);
+export type MemoryCategory = z.infer<typeof MemoryCategorySchema>;
+
 /**
  * A durable fact, preference, or piece of context the agent learned about a
  * user. `embedding` is a 1024-dim Voyage vector used by Atlas Vector Search
@@ -15,7 +19,7 @@ export const MemorySchema = z.object({
   _id: zObjectId.optional(),
   userId: zObjectId,
   content: z.string(),
-  category: z.enum(["fact", "preference", "context"]),
+  category: MemoryCategorySchema,
   embedding: z.array(z.number()),
   sourceConversationId: zObjectId,
   createdAt: z.date(),

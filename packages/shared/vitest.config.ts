@@ -20,6 +20,7 @@ export default defineConfig({
       TAVILY_API_KEY: "tvly-test",
       VOYAGE_API_KEY: "pa-test",
       BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_test",
+      CRON_SECRET: "cron-secret-test",
     },
   },
 });

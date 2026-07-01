@@ -18,9 +18,16 @@ const globalForMongo = globalThis as unknown as {
 
 const client = new MongoClient(env.MONGODB_URI);
 
+// Under vitest, skip the eager connect: pure-logic tests import this module
+// transitively but never touch the DB, and an eager connect to the dummy test
+// URI raises an unhandled DNS rejection that fails the run. Production is
+// unchanged — it eagerly connects, warming one pool per process. (The driver
+// would auto-connect on first operation regardless.)
 export const clientPromise: Promise<MongoClient> =
   globalForMongo._claudiusMongoClientPromise ??
-  (globalForMongo._claudiusMongoClientPromise = client.connect());
+  (globalForMongo._claudiusMongoClientPromise = process.env.VITEST
+    ? Promise.resolve(client)
+    : client.connect());
 
 /**
  * The application database is always "claudius" (per the project data model),

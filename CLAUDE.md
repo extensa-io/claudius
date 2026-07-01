@@ -10,7 +10,7 @@ The app is hosted at https://www.askclaudius.dev
 Work strictly phase by phase. The current phase spec lives in `specs/` and is the single source of truth for scope. Do not implement features from later phases, even partially, unless the current spec says so. When a spec and this file conflict, the spec wins for scope and this file wins for conventions and invariants.
 
 The `specs/` directory is private. It is gitignored and never pushed to the public repo. The five-phase arc, editorial sequencing, and design rationale inside it are part of the article series, not the codebase. Treat specs as the authoritative scope contract while working locally, but do not quote or paraphrase spec contents in commit messages, PR descriptions, code comments, or any other text that lands in the public repo. Public-facing artifacts should derive from the work itself.
-The `resources/articles` directory is private. It is gitignored and never pushed to the public repo. You will collect data from each development phase and generate a file there with all the information about the current phase that Claude will need to write the corresponding article (or articles). Keep the same content structure for all the article folders.
+The `.resources/articles` directory is private. It is gitignored and never pushed to the public repo. Here, you will capture the article material at the end of each development phase.
 
 Before marking a phase complete, verify every item under its Acceptance criteria heading and run `npm run check`.
 

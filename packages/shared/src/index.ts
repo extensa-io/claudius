@@ -25,3 +25,4 @@ export { parseAndEmbedDocument } from "./documents/parse";
 export * from "./agent";
 export * from "./tiers";
 export * from "./usage";
+export * from "./memory";

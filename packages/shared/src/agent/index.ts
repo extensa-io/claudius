@@ -2,6 +2,7 @@ export {
   type ChatGraphConfigurable,
   getChatGraph,
   loadThreadMessages,
+  MEMORIES_USED_EVENT,
 } from "./graph";
 export { buildChatModel, type BuildChatModelOptions } from "./model";
 export { getCheckpointer } from "./checkpointer";

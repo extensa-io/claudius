@@ -1,5 +1,6 @@
 import { ObjectId } from "mongodb";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { getUsableModels, loadThreadMessages } from "@claudius/shared";
 import { ChatApp } from "@/components/chat/chat-app";
 import { auth } from "@/lib/auth";
@@ -8,6 +9,7 @@ import { toUIMessages } from "@/lib/chat/messages";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type { DocumentView } from "@/lib/chat/view-types";
 import { listConversationDocuments } from "@/lib/documents";
+import { sweepUserMemories } from "@/lib/memory/sweep";
 
 // Node runtime: this page reaches Mongo and the checkpointer directly.
 export const runtime = "nodejs";
@@ -27,6 +29,22 @@ export default async function ChatPage({
 
   const userId = new ObjectId(session.user.id);
   const { c } = await searchParams;
+
+  // Lazy memory extraction (Phase 3): after this page responds, process a few of
+  // the user's conversations that have new turns since their last extraction.
+  // `after` runs post-response so it never delays the paint; the daily cron is
+  // the backstop for conversations this bounded pass doesn't reach. It's a cheap
+  // no-op once everything is up to date.
+  after(async () => {
+    try {
+      await sweepUserMemories(userId);
+    } catch (err) {
+      console.error(
+        "Sign-in memory sweep failed:",
+        err instanceof Error ? `${err.name}: ${err.message}` : err,
+      );
+    }
+  });
 
   const [conversations, modelEntries] = await Promise.all([
     listConversations(userId),

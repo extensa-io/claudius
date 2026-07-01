@@ -1,5 +1,6 @@
 import type { BaseMessage } from "@langchain/core/messages";
-import type { ClaudiusStreamWriter } from "./types";
+import { MEMORIES_USED_EVENT } from "@claudius/shared";
+import type { ClaudiusStreamWriter, UsedMemory } from "./types";
 
 /**
  * Bridge LangGraph's `streamEvents` (v2) output onto the AI SDK UI message
@@ -37,7 +38,25 @@ interface GraphStreamEvent {
   event: string;
   name: string;
   run_id: string;
-  data?: { chunk?: unknown; input?: unknown; output?: unknown };
+  data?: {
+    chunk?: unknown;
+    input?: unknown;
+    output?: unknown;
+    // Custom events (dispatchCustomEvent) put their payload directly on `data`.
+    memories?: unknown;
+  };
+}
+
+/** Validate the memories payload shape before trusting it on the wire. */
+function asUsedMemories(value: unknown): UsedMemory[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (m): m is UsedMemory =>
+      typeof m === "object" &&
+      m !== null &&
+      typeof (m as UsedMemory).id === "string" &&
+      typeof (m as UsedMemory).content === "string",
+  );
 }
 
 function addUsage(totals: UsageTotals, usage: UsageMetadata | undefined): void {
@@ -138,6 +157,22 @@ export async function bridgeGraphEvents(
           output: parseToolOutput(ev.data?.output),
           dynamic: true,
         });
+        break;
+      }
+
+      case "on_custom_event": {
+        // load_context emits this when memories informed the turn. Written
+        // non-transient so it sticks to the assistant message as a footer chip.
+        if (ev.name === MEMORIES_USED_EVENT) {
+          const memories = asUsedMemories(ev.data?.memories);
+          if (memories.length > 0) {
+            writer.write({
+              type: "data-memories",
+              id: "memories",
+              data: { memories },
+            });
+          }
+        }
         break;
       }
     }
