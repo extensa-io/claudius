@@ -13,8 +13,14 @@ import type {
   DocumentView,
   ModelOption,
 } from "@/lib/chat/view-types";
+import { BudgetBanner } from "./budget-banner";
 import { ChatPane } from "./chat-pane";
 import { Sidebar, type SidebarUser } from "./sidebar";
+
+export interface BudgetInfo {
+  level: "warn" | "blocked";
+  ratio: number | null;
+}
 
 /**
  * Top-level chat shell: the sidebar (persistent on desktop, a drawer on mobile)
@@ -30,6 +36,7 @@ export function ChatApp({
   initialConversationId,
   initialMessages,
   initialDocuments,
+  budget,
 }: {
   user: SidebarUser;
   initialConversations: ConversationSummary[];
@@ -37,6 +44,7 @@ export function ChatApp({
   initialConversationId: string | null;
   initialMessages: ClaudiusUIMessage[];
   initialDocuments: DocumentView[];
+  budget: BudgetInfo | null;
 }): React.ReactNode {
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState<string | null>(
@@ -162,33 +170,36 @@ export function ChatApp({
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden">
-      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border lg:block">
-        {sidebar}
-      </aside>
-
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-72 p-0">
-          <SheetTitle className="sr-only">Conversations</SheetTitle>
+    <div className="flex h-dvh flex-col overflow-hidden">
+      {budget && <BudgetBanner level={budget.level} ratio={budget.ratio} />}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside className="hidden w-64 shrink-0 border-r border-sidebar-border lg:block">
           {sidebar}
-        </SheetContent>
-      </Sheet>
+        </aside>
 
-      <main className="min-w-0 flex-1">
-        <ChatPane
-          key={paneKey}
-          conversationId={activeId}
-          initialMessages={seedMessages}
-          initialDocuments={seedDocuments}
-          role={user.role as Role}
-          modelId={modelId}
-          models={models}
-          onModelChange={setModelId}
-          onConversationCreated={onConversationCreated}
-          onTurnComplete={onTurnComplete}
-          onOpenSidebar={() => setSidebarOpen(true)}
-        />
-      </main>
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent side="left" className="w-72 p-0">
+            <SheetTitle className="sr-only">Conversations</SheetTitle>
+            {sidebar}
+          </SheetContent>
+        </Sheet>
+
+        <main className="min-w-0 flex-1">
+          <ChatPane
+            key={paneKey}
+            conversationId={activeId}
+            initialMessages={seedMessages}
+            initialDocuments={seedDocuments}
+            role={user.role as Role}
+            modelId={modelId}
+            models={models}
+            onModelChange={setModelId}
+            onConversationCreated={onConversationCreated}
+            onTurnComplete={onTurnComplete}
+            onOpenSidebar={() => setSidebarOpen(true)}
+          />
+        </main>
+      </div>
     </div>
   );
 }

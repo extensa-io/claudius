@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Brain, Plus } from "lucide-react";
+import { Archive, Brain, Plus, Shield } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import type { ConversationSummary } from "@/lib/chat/view-types";
@@ -63,6 +63,16 @@ export function Sidebar({
         <Brain className="size-4" />
         Memory
       </Link>
+
+      {user.role === "admin" && (
+        <Link
+          href="/admin"
+          className="mx-2 mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
+        >
+          <Shield className="size-4" />
+          Admin
+        </Link>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
         {visible.length === 0 ? (

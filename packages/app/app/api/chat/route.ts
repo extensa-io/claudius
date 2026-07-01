@@ -23,6 +23,7 @@ import {
 import { generateTitle } from "@/lib/chat/titleGen";
 import { type ClaudiusUIMessage, ChatRequestSchema } from "@/lib/chat/types";
 import { errorResponse } from "@/lib/http";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 // LangGraph and the Mongo driver need the Node runtime, not edge. maxDuration is
 // raised so a streamed multi-step turn (model -> tool -> model) has room to run.
@@ -69,7 +70,10 @@ export const POST = auth(async (req) => {
       throw new AppError("not_found", "Conversation not found.");
     }
 
-    // 2. Enforce tiers: model permission, circuit breaker, atomic daily cap.
+    // 2a. Burst rate limit: an abuse backstop distinct from the tier daily cap.
+    await enforceRateLimit(userId, "chat");
+
+    // 2b. Enforce tiers: model permission, cost controls, atomic daily cap.
     const grant = await assertCanInvoke(userId, modelId);
 
     // 3. Now safe to create a new conversation for a first message.

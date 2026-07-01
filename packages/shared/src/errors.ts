@@ -12,21 +12,29 @@
  */
 export type AppErrorCode =
   | "unauthorized"
+  | "forbidden"
   | "not_found"
   | "invalid_input"
   | "model_not_permitted"
   | "daily_cap_reached"
+  | "monthly_budget_reached"
+  | "rate_limited"
   | "circuit_breaker_tripped"
+  | "guest_access_disabled"
   | "account_disabled"
   | "internal";
 
 const DEFAULT_STATUS: Record<AppErrorCode, number> = {
   unauthorized: 401,
+  forbidden: 403,
   not_found: 404,
   invalid_input: 400,
   model_not_permitted: 403,
   daily_cap_reached: 429,
+  monthly_budget_reached: 429,
+  rate_limited: 429,
   circuit_breaker_tripped: 429,
+  guest_access_disabled: 403,
   account_disabled: 403,
   internal: 500,
 };

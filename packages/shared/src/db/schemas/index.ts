@@ -6,3 +6,4 @@ export * from "./document";
 export * from "./chunk";
 export * from "./usageEvent";
 export * from "./settings";
+export * from "./rateLimit";

@@ -28,6 +28,14 @@ const EnvSchema = z.object({
   // Phase 3: shared secret Vercel Cron sends as `Authorization: Bearer` so the
   // memory-extraction cron route can reject any request it did not schedule.
   CRON_SECRET: z.string().min(1),
+  // Phase 4: LangSmith tracing, entirely optional. LangChain JS auto-instruments
+  // from these process.env vars when LANGSMITH_TRACING is "true" and an API key
+  // is present; absent, tracing is simply off and no code path changes. We list
+  // them here so a deployment that DOES set them is validated at boot.
+  LANGSMITH_TRACING: z.enum(["true", "false"]).optional(),
+  LANGSMITH_API_KEY: z.string().min(1).optional(),
+  LANGSMITH_PROJECT: z.string().min(1).optional(),
+  LANGSMITH_ENDPOINT: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

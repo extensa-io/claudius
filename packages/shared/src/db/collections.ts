@@ -5,6 +5,7 @@ import type {
   Conversation,
   DocumentRecord,
   Memory,
+  RateLimit,
   Settings,
   UsageEvent,
   User,
@@ -24,6 +25,7 @@ export const COLLECTIONS = {
   chunks: "chunks",
   usageEvents: "usage_events",
   settings: "settings",
+  rateLimits: "rate_limits",
 } as const;
 
 export async function usersCol(): Promise<Collection<User>> {
@@ -52,4 +54,8 @@ export async function usageEventsCol(): Promise<Collection<UsageEvent>> {
 
 export async function settingsCol(): Promise<Collection<Settings>> {
   return (await getDb()).collection<Settings>(COLLECTIONS.settings);
+}
+
+export async function rateLimitsCol(): Promise<Collection<RateLimit>> {
+  return (await getDb()).collection<RateLimit>(COLLECTIONS.rateLimits);
 }

@@ -2,13 +2,14 @@ import type { ObjectId } from "mongodb";
 import { usersCol } from "../db/collections";
 import type { Role } from "../db/schemas";
 import { AppError } from "../errors";
+import { assertWithinMonthlyBudget } from "./budget";
 import {
   findModelEntry,
   isModelPermitted,
-  loadGuestCircuitBreaker,
   loadModelCatalog,
   loadTier,
 } from "./catalog";
+import { assertGuestAllowed } from "./circuitBreaker";
 import { consumeDailyMessage } from "./dailyCap";
 
 /** What the caller needs after enforcement passes: how to actually invoke. */
@@ -41,13 +42,12 @@ export interface AssertCanInvokeOptions {
  *
  *   1. the account is active,
  *   2. the model exists and the user's role / allowedModels permit it,
- *   3. the guest circuit breaker is not tripped (guests only),
+ *   3. guests: the circuit breaker (kill switch, tripped state, or live spend
+ *      over the daily ceiling) — members: the monthly token budget soft-stop,
  *   4. the daily message cap, consumed atomically.
  *
  * On success it returns the inference profile ID the model layer needs. On any
- * failure it throws an AppError whose message is safe to show the user. Tripping
- * logic for the breaker (computing aggregate spend) is Phase 5; this phase only
- * *respects* a manually set `state: "tripped"`.
+ * failure it throws an AppError whose message is safe to show the user.
  */
 export async function assertCanInvoke(
   userId: ObjectId,
@@ -75,20 +75,23 @@ export async function assertCanInvoke(
     );
   }
 
-  // 3. Guest circuit breaker: a global kill switch, checked for guests only.
+  // The tier drives both the spend/budget controls and the daily cap, so load
+  // it once here rather than twice.
+  const tier = await loadTier(user.role);
+
+  // 3. Cost controls, by role:
+  //    - guests go through the circuit breaker (kill switch / tripped / live
+  //      spend over the daily ceiling),
+  //    - members hit the monthly token budget soft-stop,
+  //    - admins are exempt from both.
   if (user.role === "guest") {
-    const breaker = await loadGuestCircuitBreaker();
-    if (breaker.state === "tripped") {
-      throw new AppError(
-        "circuit_breaker_tripped",
-        "Guest access is paused for today. Please try again later.",
-      );
-    }
+    await assertGuestAllowed();
+  } else if (user.role === "member") {
+    await assertWithinMonthlyBudget(user, tier);
   }
 
   // 4. Daily message cap, atomically consumed. Skipped for non-message calls.
   if (consume) {
-    const tier = await loadTier(user.role);
     const allowed = await consumeDailyMessage(userId, tier.dailyMessageCap);
     if (!allowed) {
       throw new AppError(

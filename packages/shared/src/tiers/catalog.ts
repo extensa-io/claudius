@@ -52,8 +52,16 @@ export async function loadGuestCircuitBreaker(): Promise<GuestCircuitBreakerSett
   }
   // The `in` guard narrows the variant's own fields, but WithId keeps `_id`
   // typed as the full settings union, so we reconstruct a clean document.
-  const { dailyCeilingUsd, state, trippedAt } = doc;
-  return { _id: "guestCircuitBreaker", dailyCeilingUsd, state, trippedAt };
+  const { dailyCeilingUsd, state, trippedAt, killSwitch } = doc;
+  return {
+    _id: "guestCircuitBreaker",
+    dailyCeilingUsd,
+    state,
+    trippedAt,
+    // Pre-Phase-4 breaker docs have no killSwitch until the migration runs;
+    // treat a missing flag as off so an un-migrated deployment stays open.
+    killSwitch: killSwitch ?? false,
+  };
 }
 
 /**

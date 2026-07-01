@@ -60,6 +60,23 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
   created.push("memories.expiresAt_ttl");
 
+  // --- rate_limits: per-user sliding window (Phase 4) -------------------
+  // One document per (userId, key); the unique compound index makes the
+  // limiter's upsert race-safe. A TTL on updatedAt reaps rows a user has
+  // stopped hitting so the collection never grows unbounded.
+  await db
+    .collection(COLLECTIONS.rateLimits)
+    .createIndex({ userId: 1, key: 1 }, { name: "userId_key", unique: true });
+  created.push("rate_limits.userId_key");
+
+  await db
+    .collection(COLLECTIONS.rateLimits)
+    .createIndex(
+      { updatedAt: 1 },
+      { name: "updatedAt_ttl", expireAfterSeconds: 24 * 60 * 60 },
+    );
+  created.push("rate_limits.updatedAt_ttl");
+
   // --- vector search indexes --------------------------------------------
   // Created programmatically against Atlas. Every search filters by userId as a
   // pre-filter (invariant: a vector search never returns another user's data),

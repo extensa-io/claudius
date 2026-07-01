@@ -27,13 +27,13 @@ Before marking a phase complete, verify every item under its Acceptance criteria
 - Vercel Blob for raw file storage with direct client uploads
 - Tavily for web search
 - Zod for every external boundary (API input, env, model output parsing)
-- From Phase 4: a Railway worker service in this same monorepo under `packages/worker/`
+- From Phase 5: a Railway worker service in this same monorepo under `packages/worker/`
 
 Install latest stable versions and consult current package documentation rather than assuming API shapes. LangChain and the AI SDK move fast; verify signatures against the installed version.
 
 ## Repo layout
 
-npm workspaces monorepo. Two packages from Phase 0, a third (`worker`) joins in Phase 4.
+npm workspaces monorepo. Two packages from Phase 0, a third (`worker`) joins in Phase 5.
 
 ```
 packages/
@@ -47,15 +47,15 @@ packages/
     src/agent/                    LangGraph graph, tools, prompts, checkpointer setup
     src/tiers/                    Tier definitions, enforcement middleware, circuit breaker
     src/usage/                    usage_events writers and aggregation helpers
-  worker/                       Railway worker (added in Phase 4)
+  worker/                       Railway worker (added in Phase 5)
 specs/                          Phase specs — private, gitignored, never pushed
 ```
 
-`@claudius/shared` is consumed by `@claudius/app` via npm workspace resolution and Next.js `transpilePackages`. Anything that the Phase 4 worker will also need lives in `shared`; anything Next.js-bound (route handlers, Auth.js wiring, React components) lives in `app`.
+`@claudius/shared` is consumed by `@claudius/app` via npm workspace resolution and Next.js `transpilePackages`. Anything that the Phase 5 worker will also need lives in `shared`; anything Next.js-bound (route handlers, Auth.js wiring, React components) lives in `app`.
 
 ## Data model
 
-Database `claudius`. Collections: `users`, `conversations`, `checkpoints`, `checkpoint_writes`, `memories`, `documents`, `chunks`, `usage_events`, `settings`, `jobs` (Phase 4). Field-level definitions live in `packages/shared/src/db/schemas.ts` once created; the authoritative design is `specs/phase-0-foundations.md`. The checkpointer owns `checkpoints` and `checkpoint_writes`; never write to them directly.
+Database `claudius`. Collections: `users`, `conversations`, `checkpoints`, `checkpoint_writes`, `memories`, `documents`, `chunks`, `usage_events`, `settings`, `jobs` (Phase 5). Field-level definitions live in `packages/shared/src/db/schemas.ts` once created; the authoritative design is `specs/phase-0-foundations.md`. The checkpointer owns `checkpoints` and `checkpoint_writes`; never write to them directly.
 
 ## Non-negotiable invariants
 
@@ -89,7 +89,7 @@ When adding a new tool: figure out which workspaces import it (in scripts, confi
 
 ## Environment variables
 
-`MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY` (Phase 2), `TAVILY_API_KEY` (Phase 1), `BLOB_READ_WRITE_TOKEN` (Phase 2), `LANGSMITH_*` (Phase 5), `ADMIN_EMAIL` (bootstrap admin). Validate all of them in `packages/shared/src/env.ts`.
+`MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY` (Phase 2), `TAVILY_API_KEY` (Phase 1), `BLOB_READ_WRITE_TOKEN` (Phase 2), `LANGSMITH_*` (Phase 4), `ADMIN_EMAIL` (bootstrap admin). Validate all of them in `packages/shared/src/env.ts`.
 
 ## Commands
 

@@ -10,6 +10,7 @@ declare module "next-auth" {
     user: {
       id: string;
       role: Role;
+      status?: "active" | "disabled";
     } & DefaultSession["user"];
   }
 }
@@ -20,5 +21,6 @@ declare module "@auth/core/jwt" {
   interface JWT {
     uid?: string;
     role?: Role;
+    status?: "active" | "disabled";
   }
 }

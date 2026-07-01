@@ -13,9 +13,12 @@
     "lint": "eslint .",
     "db:indexes": "tsx --env-file=../../.env src/db/scripts/create-indexes.ts",
     "db:seed": "tsx --env-file=../../.env src/db/scripts/seed.ts",
-    "db:migrate:memory": "tsx --env-file=../../.env src/db/scripts/migrate-phase3-memory.ts"
+    "db:migrate:memory": "tsx --env-file=../../.env src/db/scripts/migrate-phase3-memory.ts",
+    "db:migrate:admin": "tsx --env-file=../../.env src/db/scripts/migrate-phase4-admin.ts",
+    "db:sync:pricing": "tsx --env-file=../../.env src/db/scripts/sync-bedrock-pricing.ts"
   },
   "devDependencies": {
+    "@aws-sdk/client-pricing": "^3.1077.0",
     "@types/node": "^22.0.0",
     "eslint": "^9.0.0",
     "tsx": "^4.22.4",

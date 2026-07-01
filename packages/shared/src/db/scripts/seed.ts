@@ -1,6 +1,7 @@
 import { clientPromise } from "../client";
 import { settingsCol } from "../collections";
 import {
+  type AdminAllowlistSettings,
   type AllowlistSettings,
   type GuestCircuitBreakerSettings,
   type ModelCatalogSettings,
@@ -56,17 +57,35 @@ const allowlist: AllowlistSettings = {
   emails: [],
 };
 
+const adminAllowlist: AdminAllowlistSettings = {
+  _id: "adminAllowlist",
+  emails: [],
+};
+
 const tiers: TiersSettings = {
   _id: "tiers",
-  guest: { dailyMessageCap: 10, memoryCap: 20, features: ["chat", "memory"] },
+  guest: {
+    dailyMessageCap: 10,
+    memoryCap: 20,
+    // Guests are already bounded by the daily message cap and the spend breaker,
+    // so their monthly token budget is left unlimited (null) — the breaker, not
+    // a per-guest token count, is the guest tier's cost control.
+    monthlyTokenBudget: null,
+    features: ["chat", "memory"],
+  },
   member: {
     dailyMessageCap: 200,
     memoryCap: 500,
+    // A generous monthly ceiling that a normal member never reaches; it exists
+    // as a runaway-cost soft-stop, not a rationing mechanism.
+    monthlyTokenBudget: 20_000_000,
     features: ["chat", "files", "memory", "research"],
   },
   admin: {
     dailyMessageCap: 1000,
     memoryCap: 5000,
+    // Admins are exempt from budget enforcement in code; null documents that.
+    monthlyTokenBudget: null,
     features: ["chat", "files", "memory", "research", "admin"],
   },
 };
@@ -76,11 +95,12 @@ const guestCircuitBreaker: GuestCircuitBreakerSettings = {
   dailyCeilingUsd: 1,
   state: "open",
   trippedAt: null,
+  killSwitch: false,
 };
 
 async function main(): Promise<void> {
   const col = await settingsCol();
-  const docs = [allowlist, modelCatalog, tiers, guestCircuitBreaker];
+  const docs = [allowlist, adminAllowlist, modelCatalog, tiers, guestCircuitBreaker];
 
   for (const doc of docs) {
     const { _id, ...rest } = doc;

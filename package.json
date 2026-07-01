@@ -18,7 +18,9 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "db:indexes": "npm -w @claudius/shared run db:indexes",
     "db:seed": "npm -w @claudius/shared run db:seed",
-    "db:migrate:memory": "npm -w @claudius/shared run db:migrate:memory"
+    "db:migrate:memory": "npm -w @claudius/shared run db:migrate:memory",
+    "db:migrate:admin": "npm -w @claudius/shared run db:migrate:admin",
+    "db:sync:pricing": "npm -w @claudius/shared run db:sync:pricing"
   },
   "devDependencies": {
     "vitest": "^3.0.0"

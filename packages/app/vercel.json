@@ -5,6 +5,10 @@
     {
       "path": "/api/cron/extract-memories",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/reset-breaker",
+      "schedule": "5 0 * * *"
     }
   ]
 }

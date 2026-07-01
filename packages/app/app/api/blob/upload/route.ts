@@ -1,4 +1,5 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { ObjectId } from "mongodb";
 import {
   ALLOWED_UPLOAD_CONTENT_TYPES,
   AppError,
@@ -6,6 +7,7 @@ import {
 } from "@claudius/shared";
 import { auth } from "@/lib/auth";
 import { errorResponse } from "@/lib/http";
+import { enforceRateLimit } from "@/lib/ratelimit";
 
 export const runtime = "nodejs";
 
@@ -54,6 +56,8 @@ export async function POST(request: Request): Promise<Response> {
             "File uploads are not available on the guest tier.",
           );
         }
+        // Burst backstop on the upload-token endpoint.
+        await enforceRateLimit(new ObjectId(user.id), "upload");
         return {
           allowedContentTypes: ALLOWED_UPLOAD_CONTENT_TYPES,
           maximumSizeInBytes: MAX_DOCUMENT_BYTES,

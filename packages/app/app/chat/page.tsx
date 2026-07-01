@@ -1,9 +1,14 @@
 import { ObjectId } from "mongodb";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
-import { getUsableModels, loadThreadMessages } from "@claudius/shared";
-import { ChatApp } from "@/components/chat/chat-app";
+import {
+  getMonthlyBudgetStatus,
+  getUsableModels,
+  loadThreadMessages,
+} from "@claudius/shared";
+import { ChatApp, type BudgetInfo } from "@/components/chat/chat-app";
 import { auth } from "@/lib/auth";
+import { signOut } from "@/lib/auth";
 import { getOwnedConversation, listConversations } from "@/lib/chat/conversations";
 import { toUIMessages } from "@/lib/chat/messages";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
@@ -27,6 +32,33 @@ export default async function ChatPage({
   const session = await auth();
   if (!session?.user) redirect("/");
 
+  // A disabled account can still hold a valid session; block it here rather than
+  // redirecting (the landing page would just send it back and loop). Model calls
+  // are already refused server-side in assertCanInvoke — this closes the UI.
+  if (session.user.status === "disabled") {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 p-8 text-center">
+        <h1 className="text-2xl font-semibold">Account disabled</h1>
+        <p className="max-w-md text-muted-foreground">
+          Your account has been disabled. Please contact an administrator.
+        </p>
+        <form
+          action={async () => {
+            "use server";
+            await signOut({ redirectTo: "/" });
+          }}
+        >
+          <button
+            type="submit"
+            className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
+          >
+            Sign out
+          </button>
+        </form>
+      </main>
+    );
+  }
+
   const userId = new ObjectId(session.user.id);
   const { c } = await searchParams;
 
@@ -46,14 +78,21 @@ export default async function ChatPage({
     }
   });
 
-  const [conversations, modelEntries] = await Promise.all([
+  const [conversations, modelEntries, budgetStatus] = await Promise.all([
     listConversations(userId),
     getUsableModels(userId),
+    getMonthlyBudgetStatus(userId),
   ]);
   const models = modelEntries.map((m) => ({
     id: m.id,
     displayName: m.displayName,
   }));
+
+  // Surface the monthly budget banner only when it's limited and at/near cap.
+  const budget: BudgetInfo | null =
+    budgetStatus.limited && budgetStatus.level !== "ok"
+      ? { level: budgetStatus.level, ratio: budgetStatus.ratio }
+      : null;
 
   let initialConversationId: string | null = null;
   let initialMessages: ClaudiusUIMessage[] = [];
@@ -92,6 +131,7 @@ export default async function ChatPage({
       initialConversationId={initialConversationId}
       initialMessages={initialMessages}
       initialDocuments={initialDocuments}
+      budget={budget}
     />
   );
 }

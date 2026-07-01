@@ -39,6 +39,7 @@ describe("SettingsSchema", () => {
       dailyCeilingUsd: 1,
       state: "open",
       trippedAt: null,
+      killSwitch: false,
     });
     expect(parsed._id).toBe("guestCircuitBreaker");
   });
