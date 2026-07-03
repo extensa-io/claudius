@@ -14,25 +14,26 @@ import { getChatGraph } from "@claudius/shared";
  * conversation id. Written as one update so a thread never shows a question
  * without its report.
  *
- * Both messages are tagged `additional_kwargs.claudius_research` so the UI can
- * skip them when rebuilding the transcript on reload: the research card is the
- * canonical place the report renders (with its download button), and the tag
- * keeps the model's context intact while avoiding a duplicate chat bubble.
+ * Both messages are tagged `additional_kwargs.claudius_research` (and the job id)
+ * so the UI can render the report as a report — with its download and refine
+ * controls — when rebuilding the transcript on reload, and so a refine can point
+ * back at the job it builds on. The `userTurn` is the original question for a
+ * fresh report, or the refinement instruction for a refine.
  */
-const RESEARCH_TAG = { claudius_research: true };
-
 export async function appendResearchToThread(
   threadId: string,
-  question: string,
+  userTurn: string,
   report: string,
+  jobId: string,
 ): Promise<void> {
+  const tag = { claudius_research: true, claudius_job_id: jobId };
   const graph = await getChatGraph();
   await graph.updateState(
     { configurable: { thread_id: threadId } },
     {
       messages: [
-        new HumanMessage({ content: question, additional_kwargs: RESEARCH_TAG }),
-        new AIMessage({ content: report, additional_kwargs: RESEARCH_TAG }),
+        new HumanMessage({ content: userTurn, additional_kwargs: tag }),
+        new AIMessage({ content: report, additional_kwargs: tag }),
       ],
     },
   );

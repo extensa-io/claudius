@@ -105,11 +105,40 @@ describe("runResearchJob", () => {
       j.conversationId.toString(),
       j.input.question,
       expect.stringContaining("Report"),
+      j._id.toString(),
     );
     const [, result] = completeJob.mock.calls[0] ?? [];
     expect(result.sources).toHaveLength(1);
     expect(result.pagesRead).toBe(1);
     expect(result.report).toContain("[1]");
+  });
+
+  it("a refine builds on the prior report and posts the instruction as the turn", async () => {
+    invoke
+      .mockResolvedValueOnce(modelReply('{"queries":["vq 2025 update"]}'))
+      .mockResolvedValueOnce(modelReply('{"sufficient":true,"nextQueries":[]}'))
+      .mockResolvedValueOnce(modelReply("# Updated report [1]\n## Sources\n[1] x — https://a.example/vq"));
+
+    const j = {
+      ...job(),
+      input: {
+        question: "What is vector quantization?",
+        modelId: "sonnet",
+        refinement: "add 2025 benchmarks",
+        priorReport: "# Prior report\nVQ basics ...",
+        parentJobId: "parent123",
+      },
+    };
+    await runResearchJob(j);
+
+    // The user turn written to the thread is the refinement instruction.
+    expect(appendResearchToThread).toHaveBeenCalledWith(
+      j.conversationId.toString(),
+      "add 2025 benchmarks",
+      expect.any(String),
+      j._id.toString(),
+    );
+    expect(completeJob).toHaveBeenCalled();
   });
 
   it("stops cold when cancelled before the first step", async () => {

@@ -37,6 +37,12 @@ Respond with ONLY a JSON object: {"sufficient": true|false, "nextQueries":["..."
 
 const SYNTH_SYSTEM = `You are a research analyst writing a final report that answers the question using ONLY the numbered sources provided. Write clear, well-structured Markdown. Support claims with inline citations in square brackets referencing the source numbers, like [1] or [2][3]. Do not invent facts or sources beyond those given. End with a "## Sources" section listing each cited source as "[n] Title — URL".`;
 
+const REFINE_PLAN_SYSTEM = `You are refining an existing research report to satisfy a user's instruction. Given the original question, the existing report, and the refinement requested, produce 2-4 focused web search queries that gather the NEW information needed to satisfy the refinement — fill gaps, update facts, or add the requested angle. Do not repeat what the existing report already covers well.
+
+Respond with ONLY a JSON object: {"queries":["...","..."]}. No prose, no markdown fences.`;
+
+const REFINE_SYNTH_SYSTEM = `You are updating a research report to satisfy a refinement instruction. Produce a complete, self-contained UPDATED report in Markdown that carries forward the useful content of the prior report and incorporates the refinement. Cite claims using ONLY the numbered sources provided below, with inline citations like [1] or [2][3]. Treat the prior report as background you may reuse, but do not cite it; cite the numbered sources. Do not invent facts or sources beyond those given. End with a "## Sources" section listing each cited source as "[n] Title — URL".`;
+
 const PlanSchema = z.object({ queries: z.array(z.string()).max(6) });
 const IterateSchema = z.object({
   sufficient: z.boolean(),
@@ -71,7 +77,11 @@ const PAGES_PER_ROUND = 4;
 async function researchPipeline(job: WithId<ResearchJob>): Promise<void> {
   const jobId = job._id;
   const { userId, conversationId } = job;
-  const { question, modelId } = job.input;
+  const { question, modelId, refinement, priorReport } = job.input;
+  const isRefine = Boolean(refinement && priorReport);
+  // The user turn shown for this report: the instruction on a refine, else the
+  // original question.
+  const userTurn = refinement ?? question;
 
   const budget = await loadResearchBudget();
   const deadline = Date.now() + budget.wallClockMs;
@@ -138,13 +148,20 @@ async function researchPipeline(job: WithId<ResearchJob>): Promise<void> {
   if (await cancelled()) return;
   await appendJobProgress(jobId, {
     step: "plan",
-    detail: `Planning research on: ${question.slice(0, 80)}`,
+    detail: isRefine
+      ? `Refining: ${(refinement ?? "").slice(0, 80)}`
+      : `Planning research on: ${question.slice(0, 80)}`,
   });
-  const planned = PlanSchema.safeParse(parseJson(await think(PLAN_SYSTEM, question, 800)));
+  const planPrompt = isRefine
+    ? `Original question: ${question}\n\nExisting report (excerpt):\n${(priorReport ?? "").slice(0, 6000)}\n\nRefinement requested: ${refinement}`
+    : question;
+  const planned = PlanSchema.safeParse(
+    parseJson(await think(isRefine ? REFINE_PLAN_SYSTEM : PLAN_SYSTEM, planPrompt, 800)),
+  );
   let queries =
     planned.success && planned.data.queries.length > 0
       ? planned.data.queries
-      : [question];
+      : [refinement ?? question];
 
   // --- 2. Search -> read -> decide, until enough or a budget runs out -------
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -225,11 +242,17 @@ async function researchPipeline(job: WithId<ResearchJob>): Promise<void> {
   const sourceBlock = cited
     .map((s) => `[${s.citeN}] ${s.title} (${s.url})\n${s.text ?? ""}`)
     .join("\n\n---\n\n");
-  const report = await think(
-    SYNTH_SYSTEM,
-    `Question: ${question}\n\nNumbered sources:\n\n${sourceBlock}`,
-    4096,
-  );
+  const report = isRefine
+    ? await think(
+        REFINE_SYNTH_SYSTEM,
+        `Original question: ${question}\n\nRefinement requested: ${refinement}\n\nExisting report:\n${(priorReport ?? "").slice(0, 12000)}\n\nNew numbered sources:\n\n${sourceBlock}`,
+        4096,
+      )
+    : await think(
+        SYNTH_SYSTEM,
+        `Question: ${question}\n\nNumbered sources:\n\n${sourceBlock}`,
+        4096,
+      );
 
   const resultSources: ResearchSource[] = cited.map((s) => ({
     n: s.citeN,
@@ -239,7 +262,12 @@ async function researchPipeline(job: WithId<ResearchJob>): Promise<void> {
 
   // --- 4. Persist: report into chat history, then finalize the job ----------
   if (await cancelled()) return;
-  await appendResearchToThread(conversationId.toString(), question, report);
+  await appendResearchToThread(
+    conversationId.toString(),
+    userTurn,
+    report,
+    jobId.toString(),
+  );
   await appendJobProgress(jobId, { step: "done", detail: "Report ready" });
   await completeJob(jobId, {
     report,

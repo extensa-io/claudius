@@ -46,10 +46,18 @@ export const ResearchSourceSchema = z.object({
 });
 export type ResearchSource = z.infer<typeof ResearchSourceSchema>;
 
-/** What a research job needs to run: the question and which model to reason with. */
+/** What a research job needs to run: the question and which model to reason with.
+ * A refine also carries the instruction, the prior report to build on, and a link
+ * to the report it refines. */
 export const ResearchJobInputSchema = z.object({
   question: z.string().min(1),
   modelId: z.string().min(1),
+  /** The refinement instruction, when this job refines an earlier report. */
+  refinement: z.string().min(1).optional(),
+  /** The earlier report the model should build on (present on a refine). */
+  priorReport: z.string().optional(),
+  /** The job id of the report being refined, for lineage. */
+  parentJobId: z.string().optional(),
 });
 
 /** A finished research report: markdown with inline [n] citations + the sources. */

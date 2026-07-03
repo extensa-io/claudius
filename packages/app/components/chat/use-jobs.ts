@@ -23,7 +23,10 @@ function isActive(job: JobView): boolean {
 export interface StartResearchParams {
   conversationId: string | null;
   modelId: string;
-  question: string;
+  /** A fresh run sends `question`; a refine sends `refinement` + `parentJobId`. */
+  question?: string;
+  refinement?: string;
+  parentJobId?: string;
 }
 
 export interface UseResearchJobs {
@@ -110,13 +113,25 @@ export function useResearchJobs({
   }, [hasActive, jobs]);
 
   const start = useCallback(
-    async ({ conversationId, modelId, question }: StartResearchParams): Promise<void> => {
+    async ({
+      conversationId,
+      modelId,
+      question,
+      refinement,
+      parentJobId,
+    }: StartResearchParams): Promise<void> => {
       let res: Response;
       try {
         res = await fetch("/api/research", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ conversationId, modelId, question }),
+          body: JSON.stringify({
+            conversationId,
+            modelId,
+            question,
+            refinement,
+            parentJobId,
+          }),
         });
       } catch {
         onError("Could not start research. Check your connection.");
@@ -141,7 +156,7 @@ export function useResearchJobs({
         id: data.jobId,
         type: "research",
         status: "queued",
-        question,
+        question: question ?? (refinement ? `Refine: ${refinement}` : ""),
         progress: [],
         report: null,
         sources: [],

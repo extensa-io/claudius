@@ -33,12 +33,20 @@ export function toUIMessages(
         parts: [{ type: "text", text }],
       });
     } else if (type === "ai" && text.length > 0) {
+      const jobId = message.additional_kwargs?.claudius_job_id;
       ui.push({
         id: message.id ?? `msg-${index}`,
         role: "assistant",
         parts: [{ type: "text", text }],
         ...(isResearch
-          ? { metadata: { research: { question: lastResearchQuestion } } }
+          ? {
+              metadata: {
+                research: {
+                  question: lastResearchQuestion,
+                  ...(typeof jobId === "string" ? { jobId } : {}),
+                },
+              },
+            }
           : {}),
       });
     }

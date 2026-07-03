@@ -36,7 +36,9 @@ export interface MemoriesDataPart {
  * download button. The question rides along for the download filename.
  */
 export interface ClaudiusMessageMetadata {
-  research?: { question: string };
+  /** Present on a research report message. `jobId` is the report's job, used to
+   * refine it (start a follow-up run seeded with this report). */
+  research?: { question: string; jobId?: string };
 }
 
 /** Claudius's UIMessage shape: research metadata, two custom data parts. */

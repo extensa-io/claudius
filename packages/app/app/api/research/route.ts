@@ -1,7 +1,12 @@
 import { ObjectId } from "mongodb";
 import { after } from "next/server";
 import { z } from "zod";
-import { AppError, assertCanInvoke, enqueueResearchJob } from "@claudius/shared";
+import {
+  AppError,
+  assertCanInvoke,
+  enqueueResearchJob,
+  getJobForOwner,
+} from "@claudius/shared";
 import { auth } from "@/lib/auth";
 import {
   createConversation,
@@ -30,7 +35,11 @@ export const runtime = "nodejs";
 const ResearchRequestSchema = z.object({
   conversationId: z.string().min(1).nullish(),
   modelId: z.string().min(1),
-  question: z.string().min(1).max(2_000),
+  // A fresh run sends `question`; a refine sends `refinement` + `parentJobId`
+  // (the question and prior report are derived from the parent job server-side).
+  question: z.string().min(1).max(2_000).optional(),
+  refinement: z.string().min(1).max(2_000).optional(),
+  parentJobId: z.string().min(1).optional(),
 });
 
 /**
@@ -62,7 +71,8 @@ export const POST = auth(async (req) => {
   if (!parsed.success) {
     return errorResponse(new AppError("invalid_input", "Invalid research request."));
   }
-  const { conversationId, modelId, question } = parsed.data;
+  const { conversationId, modelId, refinement, parentJobId } = parsed.data;
+  const isRefine = Boolean(parentJobId && refinement);
 
   try {
     let conversation = conversationId
@@ -70,6 +80,45 @@ export const POST = auth(async (req) => {
       : null;
     if (conversationId && !conversation) {
       throw new AppError("not_found", "Conversation not found.");
+    }
+
+    // Resolve the research goal. A refine derives its question and the report to
+    // build on from the parent job (owner-scoped); a fresh run takes the question
+    // straight from the request.
+    let question: string;
+    let refineFields:
+      | { refinement: string; priorReport: string; parentJobId: string }
+      | undefined;
+    if (isRefine) {
+      if (!conversation) {
+        throw new AppError("invalid_input", "A refine needs its conversation.");
+      }
+      if (!parentJobId || !ObjectId.isValid(parentJobId)) {
+        throw new AppError("not_found", "Report not found.");
+      }
+      if (!refinement) {
+        throw new AppError("invalid_input", "A refinement instruction is required.");
+      }
+      const parent = await getJobForOwner(userId, new ObjectId(parentJobId));
+      if (
+        !parent ||
+        parent.type !== "research" ||
+        parent.status !== "done" ||
+        !parent.result
+      ) {
+        throw new AppError("not_found", "That report can't be refined.");
+      }
+      question = parent.input.question;
+      refineFields = {
+        refinement,
+        priorReport: parent.result.report,
+        parentJobId,
+      };
+    } else {
+      if (!parsed.data.question) {
+        throw new AppError("invalid_input", "A question is required.");
+      }
+      question = parsed.data.question;
     }
 
     await enforceRateLimit(userId, "chat");
@@ -112,6 +161,7 @@ export const POST = auth(async (req) => {
       conversationId: conversationObjId,
       question,
       modelId,
+      ...(refineFields ?? {}),
     });
 
     return Response.json({

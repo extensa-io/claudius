@@ -14,6 +14,10 @@ export interface EnqueueResearchParams {
   conversationId: ObjectId;
   question: string;
   modelId: string;
+  /** Present when this run refines an earlier report. */
+  refinement?: string;
+  priorReport?: string;
+  parentJobId?: string;
 }
 
 /** Insert a queued research job and return its id. Members/admins only (guests
@@ -26,7 +30,13 @@ export async function enqueueResearchJob(
     userId: params.userId,
     conversationId: params.conversationId,
     status: "queued",
-    input: { question: params.question, modelId: params.modelId },
+    input: {
+      question: params.question,
+      modelId: params.modelId,
+      ...(params.refinement ? { refinement: params.refinement } : {}),
+      ...(params.priorReport ? { priorReport: params.priorReport } : {}),
+      ...(params.parentJobId ? { parentJobId: params.parentJobId } : {}),
+    },
     result: null,
     progress: [],
     error: null,

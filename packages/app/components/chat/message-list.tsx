@@ -1,13 +1,19 @@
 "use client";
 
 import type { DynamicToolUIPart } from "ai";
-import { Download, Telescope } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { ClaudiusUIMessage, UsedMemory } from "@/lib/chat/types";
-import { downloadReportMarkdown } from "@/lib/jobs/download";
 import { Markdown } from "./markdown";
 import { MemoryUsedChip } from "./memory-used-chip";
+import { ReportControls } from "./report-controls";
 import { ToolActivity } from "./tool-activity";
+
+function messageText(message: ClaudiusUIMessage): string {
+  return message.parts
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("");
+}
 
 /**
  * The scrolling transcript. User turns sit in a quiet right-aligned bubble;
@@ -22,6 +28,7 @@ export function MessageList({
   isWaiting,
   footer,
   footerRevision,
+  onRefine,
 }: {
   messages: ClaudiusUIMessage[];
   /** True between submit and the first assistant token (the "thinking" gap). */
@@ -30,6 +37,8 @@ export function MessageList({
   footer?: React.ReactNode;
   /** Bump to re-run the stick-to-bottom effect as the footer content changes. */
   footerRevision?: number;
+  /** Start a follow-up run that refines a finished report. */
+  onRefine?: (jobId: string, instruction: string) => void;
 }): React.ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -72,33 +81,12 @@ export function MessageList({
               className="max-w-none text-[0.95rem] leading-7"
             >
               {message.metadata?.research && (
-                <div className="mb-2 flex items-center justify-between border-b border-border pb-2">
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                    <Telescope className="size-3.5 text-primary" />
-                    Research report
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      downloadReportMarkdown(
-                        message.metadata?.research?.question ?? "",
-                        message.parts
-                          .filter(
-                            (p): p is { type: "text"; text: string } =>
-                              p.type === "text",
-                          )
-                          .map((p) => p.text)
-                          .join(""),
-                      )
-                    }
-                    aria-label="Download report"
-                    title="Download report as Markdown"
-                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                  >
-                    <Download className="size-3.5" />
-                    Download
-                  </button>
-                </div>
+                <ReportControls
+                  question={message.metadata.research.question}
+                  report={messageText(message)}
+                  jobId={message.metadata.research.jobId}
+                  onRefine={onRefine ?? (() => {})}
+                />
               )}
               {message.parts.map((part, i) => {
                 if (part.type === "text") {

@@ -125,7 +125,9 @@ export function ChatPane({
             id: reportId,
             role: "assistant",
             parts: [{ type: "text", text: job.report ?? "" }],
-            metadata: { research: { question: job.question ?? "" } },
+            metadata: {
+              research: { question: job.question ?? "", jobId: job.id },
+            },
           },
         ];
       });
@@ -140,6 +142,18 @@ export function ChatPane({
     onSettled: onTurnComplete,
     onReportReady,
   });
+
+  // Refine a finished report: start a follow-up research run seeded with that
+  // report (the worker builds on it) in the same conversation.
+  const onRefine = (parentJobId: string, instruction: string): void => {
+    setResearchError(null);
+    void research.start({
+      conversationId,
+      modelId,
+      refinement: instruction,
+      parentJobId,
+    });
+  };
 
   const busy = status === "submitted" || status === "streaming";
   const isWaiting =
@@ -218,6 +232,7 @@ export function ChatPane({
             isWaiting={isWaiting}
             footer={researchFooter}
             footerRevision={footerRevision}
+            onRefine={onRefine}
           />
         )}
       </div>
