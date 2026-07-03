@@ -3,14 +3,17 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { PanelLeft } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Role } from "@claudius/shared";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type { DocumentView, ModelOption } from "@/lib/chat/view-types";
+import type { JobView } from "@/lib/jobs/view";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
 import { ModelSelector } from "./model-selector";
+import { ResearchCard } from "./research-card";
 import { useDocuments } from "./use-documents";
+import { useResearchJobs } from "./use-jobs";
 
 /**
  * Owns the live chat session for one conversation. The parent remounts this
@@ -22,6 +25,7 @@ export function ChatPane({
   conversationId,
   initialMessages,
   initialDocuments,
+  initialJobs,
   role,
   modelId,
   models,
@@ -33,6 +37,7 @@ export function ChatPane({
   conversationId: string | null;
   initialMessages: ClaudiusUIMessage[];
   initialDocuments: DocumentView[];
+  initialJobs: JobView[];
   role: Role;
   modelId: string;
   models: ModelOption[];
@@ -42,7 +47,16 @@ export function ChatPane({
   onOpenSidebar: () => void;
 }): React.ReactNode {
   const canAttach = role !== "guest";
+  const canResearch = role !== "guest";
   const documents = useDocuments({ conversationId, initialDocuments });
+  const [researchOn, setResearchOn] = useState(false);
+  const [researchError, setResearchError] = useState<string | null>(null);
+  const research = useResearchJobs({
+    initialJobs,
+    onConversationCreated,
+    onError: setResearchError,
+    onSettled: onTurnComplete,
+  });
   const transport = useMemo(
     () =>
       new DefaultChatTransport<ClaudiusUIMessage>({
@@ -103,6 +117,14 @@ export function ChatPane({
     messages[messages.length - 1]?.role === "user";
 
   const send = (text: string): void => {
+    setResearchError(null);
+    if (researchOn) {
+      // Research is a one-shot per question: turn the toggle back off so the next
+      // message is a normal chat turn unless the user re-enables it.
+      setResearchOn(false);
+      void research.start({ conversationId, modelId, question: text });
+      return;
+    }
     void sendMessage(
       { text },
       {
@@ -115,7 +137,24 @@ export function ChatPane({
     );
   };
 
-  const isEmpty = messages.length === 0;
+  const isEmpty = messages.length === 0 && research.jobs.length === 0;
+  const researchFooter =
+    research.jobs.length > 0 ? (
+      <div>
+        {research.jobs.map((job) => (
+          <ResearchCard
+            key={job.id}
+            job={job}
+            onCancel={(id) => void research.cancel(id)}
+          />
+        ))}
+      </div>
+    ) : null;
+  // Changes as jobs are added or their progress grows, so the transcript
+  // re-sticks to the bottom while a research card streams updates.
+  const footerRevision =
+    research.jobs.length +
+    research.jobs.reduce((n, j) => n + j.progress.length, 0);
 
   return (
     <div className="flex h-full flex-col">
@@ -144,14 +183,19 @@ export function ChatPane({
             </p>
           </div>
         ) : (
-          <MessageList messages={messages} isWaiting={isWaiting} />
+          <MessageList
+            messages={messages}
+            isWaiting={isWaiting}
+            footer={researchFooter}
+            footerRevision={footerRevision}
+          />
         )}
       </div>
 
-      {error && (
+      {(error || researchError) && (
         <div className="mx-auto w-full max-w-3xl px-4">
           <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error.message}
+            {researchError ?? error?.message}
           </p>
         </div>
       )}
@@ -165,6 +209,9 @@ export function ChatPane({
         onUploadFiles={documents.uploadFiles}
         onRetryDoc={documents.retry}
         onRemoveDoc={documents.remove}
+        canResearch={canResearch}
+        researchOn={researchOn}
+        onToggleResearch={() => setResearchOn((v) => !v)}
       />
     </div>
   );

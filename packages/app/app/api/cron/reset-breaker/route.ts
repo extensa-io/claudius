@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { env, resetBreaker } from "@claudius/shared";
+import { appEnv, resetBreaker } from "@claudius/shared";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  */
 export async function GET(req: NextRequest): Promise<Response> {
   const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${appEnv().CRON_SECRET}`) {
     return Response.json({ error: { code: "unauthorized" } }, { status: 401 });
   }
 

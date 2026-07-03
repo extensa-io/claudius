@@ -1,4 +1,4 @@
-import { env, settingsCol, type Role } from "@claudius/shared";
+import { appEnv, settingsCol, type Role } from "@claudius/shared";
 
 /**
  * Resolves a user's role server-side, the only place role is ever decided
@@ -17,7 +17,7 @@ export async function resolveRole(email: string | null | undefined): Promise<Rol
 
   const normalized = email.toLowerCase();
   // 1. Env admin outranks everything and cannot be revoked via a list.
-  if (normalized === env.ADMIN_EMAIL.toLowerCase()) return "admin";
+  if (normalized === appEnv().ADMIN_EMAIL.toLowerCase()) return "admin";
 
   const settings = await settingsCol();
   const [adminList, memberList] = await Promise.all([

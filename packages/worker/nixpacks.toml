@@ -1,0 +1,24 @@
+# Railway builds this service with Nixpacks. The monorepo installs at the repo
+# root (npm workspaces), so the build runs `npm install` there and the worker
+# starts via tsx against its TypeScript source, the same raw-TS-as-source model
+# the shared package and the db scripts already use, so there is no separate
+# compile step to keep in sync.
+#
+# Set the Railway service Root Directory to the repo root and point it at this
+# file with NIXPACKS_CONFIG_FILE=packages/worker/nixpacks.toml.
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm install"]
+
+# Explicitly no build step. Without this, Nixpacks auto-detects the root
+# package.json `build` script (`next build`) and runs it, which is the app's
+# build, not the worker's. The worker runs TypeScript directly via tsx, so the
+# build phase is a deliberate no-op.
+[phases.build]
+cmds = []
+
+[start]
+cmd = "npm --workspace @claudius/worker run start"

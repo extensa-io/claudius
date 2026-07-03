@@ -77,6 +77,32 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     );
   created.push("rate_limits.updatedAt_ttl");
 
+  // --- jobs: the app<->worker bus (Phase 5) -----------------------------
+  // The worker's claim/poll query is "the oldest queued job", so a compound
+  // { status, createdAt } index serves both the change-stream catch-up and the
+  // polling fallback directly (find status:queued, sort createdAt:1).
+  await db
+    .collection(COLLECTIONS.jobs)
+    .createIndex({ status: 1, createdAt: 1 }, { name: "status_createdAt" });
+  created.push("jobs.status_createdAt");
+
+  // The UI lists a conversation's jobs (research cards); every such read filters
+  // by userId (invariant #1) then conversationId, newest first.
+  await db
+    .collection(COLLECTIONS.jobs)
+    .createIndex(
+      { userId: 1, conversationId: 1, createdAt: -1 },
+      { name: "userId_conversationId_createdAt" },
+    );
+  created.push("jobs.userId_conversationId_createdAt");
+
+  // Guest memory-extraction jobs carry expiresAt; the same TTL pattern reaps
+  // them so the coordination collection never accumulates ephemeral guest work.
+  await db
+    .collection(COLLECTIONS.jobs)
+    .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
+  created.push("jobs.expiresAt_ttl");
+
   // --- vector search indexes --------------------------------------------
   // Created programmatically against Atlas. Every search filters by userId as a
   // pre-filter (invariant: a vector search never returns another user's data),

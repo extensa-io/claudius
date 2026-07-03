@@ -18,10 +18,16 @@ import { ToolActivity } from "./tool-activity";
 export function MessageList({
   messages,
   isWaiting,
+  footer,
+  footerRevision,
 }: {
   messages: ClaudiusUIMessage[];
   /** True between submit and the first assistant token (the "thinking" gap). */
   isWaiting: boolean;
+  /** Extra content rendered after the transcript (e.g. research job cards). */
+  footer?: React.ReactNode;
+  /** Bump to re-run the stick-to-bottom effect as the footer content changes. */
+  footerRevision?: number;
 }): React.ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -36,7 +42,7 @@ export function MessageList({
   useEffect(() => {
     const el = scrollRef.current;
     if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
-  }, [messages, isWaiting]);
+  }, [messages, isWaiting, footerRevision]);
 
   return (
     <div
@@ -95,6 +101,8 @@ export function MessageList({
             <span className="size-2 animate-bounce rounded-full bg-current" />
           </div>
         )}
+
+        {footer}
       </div>
     </div>
   );

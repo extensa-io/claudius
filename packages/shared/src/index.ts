@@ -2,7 +2,13 @@
 // the worker). Anything Next.js-bound stays in the app package; everything here
 // is runtime-agnostic.
 
-export { env, type Env } from "./env";
+export {
+  env,
+  type Env,
+  appEnv,
+  assertAppEnv,
+  type AppEnv,
+} from "./env";
 export { AppError, type AppErrorCode, isAppError } from "./errors";
 export { clientPromise, getDb, DB_NAME } from "./db/client";
 export * from "./db/collections";
@@ -28,3 +34,4 @@ export * from "./usage";
 export * from "./memory";
 export * from "./ratelimit";
 export * from "./admin";
+export * from "./jobs";

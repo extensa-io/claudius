@@ -20,7 +20,9 @@
     "db:seed": "npm -w @claudius/shared run db:seed",
     "db:migrate:memory": "npm -w @claudius/shared run db:migrate:memory",
     "db:migrate:admin": "npm -w @claudius/shared run db:migrate:admin",
-    "db:sync:pricing": "npm -w @claudius/shared run db:sync:pricing"
+    "db:migrate:research": "npm -w @claudius/shared run db:migrate:research",
+    "db:sync:pricing": "npm -w @claudius/shared run db:sync:pricing",
+    "worker:dev": "npm -w @claudius/worker run dev"
   },
   "devDependencies": {
     "vitest": "^3.0.0"

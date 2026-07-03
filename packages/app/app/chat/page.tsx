@@ -14,7 +14,8 @@ import { toUIMessages } from "@/lib/chat/messages";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type { DocumentView } from "@/lib/chat/view-types";
 import { listConversationDocuments } from "@/lib/documents";
-import { sweepUserMemories } from "@/lib/memory/sweep";
+import { getActiveResearchJobViews, type JobView } from "@/lib/jobs/view";
+import { enqueueUserMemories } from "@/lib/memory/enqueue";
 
 // Node runtime: this page reaches Mongo and the checkpointer directly.
 export const runtime = "nodejs";
@@ -62,17 +63,18 @@ export default async function ChatPage({
   const userId = new ObjectId(session.user.id);
   const { c } = await searchParams;
 
-  // Lazy memory extraction (Phase 3): after this page responds, process a few of
-  // the user's conversations that have new turns since their last extraction.
-  // `after` runs post-response so it never delays the paint; the daily cron is
-  // the backstop for conversations this bounded pass doesn't reach. It's a cheap
-  // no-op once everything is up to date.
+  // Lazy memory extraction (Phase 3, now enqueue-only in Phase 5): after this
+  // page responds, ENQUEUE extraction jobs for a few of the user's conversations
+  // that have new turns since their last extraction — the worker does the actual
+  // model work. `after` runs post-response so it never delays the paint; the
+  // daily cron is the backstop. Enqueuing dedupes, so it's a cheap no-op when
+  // everything is already queued or up to date.
   after(async () => {
     try {
-      await sweepUserMemories(userId);
+      await enqueueUserMemories(userId);
     } catch (err) {
       console.error(
-        "Sign-in memory sweep failed:",
+        "Sign-in memory enqueue failed:",
         err instanceof Error ? `${err.name}: ${err.message}` : err,
       );
     }
@@ -97,14 +99,15 @@ export default async function ChatPage({
   let initialConversationId: string | null = null;
   let initialMessages: ClaudiusUIMessage[] = [];
   let initialDocuments: DocumentView[] = [];
+  let initialJobs: JobView[] = [];
   if (c) {
     const conversation = await getOwnedConversation(userId, c);
     if (conversation) {
       initialConversationId = c;
-      initialDocuments = await listConversationDocuments(
-        userId,
-        conversation._id!,
-      );
+      [initialDocuments, initialJobs] = await Promise.all([
+        listConversationDocuments(userId, conversation._id!),
+        getActiveResearchJobViews(userId, conversation._id!),
+      ]);
       try {
         initialMessages = toUIMessages(await loadThreadMessages(c));
       } catch (err) {
@@ -131,6 +134,7 @@ export default async function ChatPage({
       initialConversationId={initialConversationId}
       initialMessages={initialMessages}
       initialDocuments={initialDocuments}
+      initialJobs={initialJobs}
       budget={budget}
     />
   );

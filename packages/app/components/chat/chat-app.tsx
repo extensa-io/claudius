@@ -13,6 +13,7 @@ import type {
   DocumentView,
   ModelOption,
 } from "@/lib/chat/view-types";
+import type { JobView } from "@/lib/jobs/view";
 import { BudgetBanner } from "./budget-banner";
 import { ChatPane } from "./chat-pane";
 import { Sidebar, type SidebarUser } from "./sidebar";
@@ -36,6 +37,7 @@ export function ChatApp({
   initialConversationId,
   initialMessages,
   initialDocuments,
+  initialJobs,
   budget,
 }: {
   user: SidebarUser;
@@ -44,6 +46,7 @@ export function ChatApp({
   initialConversationId: string | null;
   initialMessages: ClaudiusUIMessage[];
   initialDocuments: DocumentView[];
+  initialJobs: JobView[];
   budget: BudgetInfo | null;
 }): React.ReactNode {
   const [conversations, setConversations] = useState(initialConversations);
@@ -54,6 +57,7 @@ export function ChatApp({
     useState<ClaudiusUIMessage[]>(initialMessages);
   const [seedDocuments, setSeedDocuments] =
     useState<DocumentView[]>(initialDocuments);
+  const [seedJobs, setSeedJobs] = useState<JobView[]>(initialJobs);
   const [paneKey, setPaneKey] = useState<string>(
     initialConversationId ?? "new-0",
   );
@@ -88,9 +92,11 @@ export function ChatApp({
         conversation: ConversationSummary;
         messages: ClaudiusUIMessage[];
         documents: DocumentView[];
+        jobs: JobView[];
       };
       setSeedMessages(data.messages);
       setSeedDocuments(data.documents);
+      setSeedJobs(data.jobs);
       setActiveId(id);
       setModelId(
         models.some((m) => m.id === data.conversation.modelId)
@@ -108,6 +114,7 @@ export function ChatApp({
     setActiveId(null);
     setSeedMessages([]);
     setSeedDocuments([]);
+    setSeedJobs([]);
     newCounter.current += 1;
     setPaneKey(`new-${newCounter.current}`);
     setUrl(null);
@@ -190,6 +197,7 @@ export function ChatApp({
             conversationId={activeId}
             initialMessages={seedMessages}
             initialDocuments={seedDocuments}
+            initialJobs={seedJobs}
             role={user.role as Role}
             modelId={modelId}
             models={models}

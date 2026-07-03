@@ -9,6 +9,7 @@ export {
   isModelPermitted,
   loadGuestCircuitBreaker,
   loadModelCatalog,
+  loadResearchBudget,
   loadTier,
 } from "./catalog";
 export { consumeDailyMessage, startOfNextUtcDay } from "./dailyCap";

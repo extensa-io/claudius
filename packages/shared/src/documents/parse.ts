@@ -6,7 +6,7 @@ import { extractText } from "unpdf";
 import { chunksCol, documentsCol } from "../db/collections";
 import type { Chunk, DocumentRecord } from "../db/schemas";
 import { embedTexts } from "../embeddings/voyage";
-import { env } from "../env";
+import { appEnv } from "../env";
 import {
   classifyDocument,
   MAX_CHUNKS_PER_DOCUMENT,
@@ -59,7 +59,7 @@ async function fetchBytes(url: string): Promise<ArrayBuffer> {
   // by URL (the app's per-user isolation extends to the raw files, not just chunks).
   const result = await get(url, {
     access: "private",
-    token: env.BLOB_READ_WRITE_TOKEN,
+    token: appEnv().BLOB_READ_WRITE_TOKEN,
   });
   if (!result?.stream) {
     throw new Error("Could not fetch the uploaded file.");

@@ -3,6 +3,7 @@ import { settingsCol, usersCol } from "../db/collections";
 import type {
   GuestCircuitBreakerSettings,
   ModelCatalogEntry,
+  ResearchBudgetSettings,
   Role,
   Tier,
   User,
@@ -61,6 +62,23 @@ export async function loadGuestCircuitBreaker(): Promise<GuestCircuitBreakerSett
     // Pre-Phase-4 breaker docs have no killSwitch until the migration runs;
     // treat a missing flag as off so an un-migrated deployment stays open.
     killSwitch: killSwitch ?? false,
+  };
+}
+
+/** The per-job research ceilings (Phase 5). Missing doc fails loudly. */
+export async function loadResearchBudget(): Promise<ResearchBudgetSettings> {
+  const settings = await settingsCol();
+  const doc = await settings.findOne({ _id: "researchBudget" });
+  if (!doc || !("maxSearches" in doc)) {
+    throw new AppError("internal", "Research budget is not configured.");
+  }
+  const { maxSearches, maxFetchedPages, maxTokens, wallClockMs } = doc;
+  return {
+    _id: "researchBudget",
+    maxSearches,
+    maxFetchedPages,
+    maxTokens,
+    wallClockMs,
   };
 }
 

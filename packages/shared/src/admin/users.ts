@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import { settingsCol, usageEventsCol, usersCol } from "../db/collections";
 import type { Role } from "../db/schemas";
-import { env } from "../env";
+import { appEnv } from "../env";
 import { AppError } from "../errors";
 import { invalidateBudgetCache } from "../tiers/budget";
 import {
@@ -36,7 +36,7 @@ export interface AdminUserRow {
 
 /** Whether an email is the non-revocable bootstrap admin from the env var. */
 export function isEnvAdminEmail(email: string): boolean {
-  return email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
+  return email.toLowerCase() === appEnv().ADMIN_EMAIL.toLowerCase();
 }
 
 /** All users with their current month usage and daily-cap consumption. */

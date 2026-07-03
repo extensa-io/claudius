@@ -94,6 +94,25 @@ export type GuestCircuitBreakerSettings = z.infer<
   typeof GuestCircuitBreakerSettingsSchema
 >;
 
+/**
+ * _id: "researchBudget" — the hard per-job ceilings for a deep-research run on
+ * the worker (Phase 5). Research is unbounded by nature, so every job is capped
+ * on four axes at once and stops at whichever it hits first: total web searches,
+ * total pages fetched and read, cumulative model tokens, and wall-clock time.
+ * Admin-tunable from the config panel, which is why they live in settings rather
+ * than as code constants.
+ */
+export const ResearchBudgetSettingsSchema = z.object({
+  _id: z.literal("researchBudget"),
+  maxSearches: z.number().int().positive(),
+  maxFetchedPages: z.number().int().positive(),
+  maxTokens: z.number().int().positive(),
+  wallClockMs: z.number().int().positive(),
+});
+export type ResearchBudgetSettings = z.infer<
+  typeof ResearchBudgetSettingsSchema
+>;
+
 /** Any settings document, discriminated by its `_id`. */
 export const SettingsSchema = z.discriminatedUnion("_id", [
   AllowlistSettingsSchema,
@@ -101,5 +120,6 @@ export const SettingsSchema = z.discriminatedUnion("_id", [
   ModelCatalogSettingsSchema,
   TiersSettingsSchema,
   GuestCircuitBreakerSettingsSchema,
+  ResearchBudgetSettingsSchema,
 ]);
 export type Settings = z.infer<typeof SettingsSchema>;

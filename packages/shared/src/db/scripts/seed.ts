@@ -5,6 +5,7 @@ import {
   type AllowlistSettings,
   type GuestCircuitBreakerSettings,
   type ModelCatalogSettings,
+  type ResearchBudgetSettings,
   type TiersSettings,
 } from "../schemas";
 
@@ -98,9 +99,27 @@ const guestCircuitBreaker: GuestCircuitBreakerSettings = {
   killSwitch: false,
 };
 
+// Deep-research ceilings (Phase 5). Deliberately generous enough to satisfy the
+// "15+ searches" acceptance case while still bounding a runaway job on four
+// axes. Admin-tunable in the config panel afterward.
+const researchBudget: ResearchBudgetSettings = {
+  _id: "researchBudget",
+  maxSearches: 20,
+  maxFetchedPages: 12,
+  maxTokens: 400_000,
+  wallClockMs: 10 * 60 * 1000, // 10 minutes, far past Vercel's 60s function cap.
+};
+
 async function main(): Promise<void> {
   const col = await settingsCol();
-  const docs = [allowlist, adminAllowlist, modelCatalog, tiers, guestCircuitBreaker];
+  const docs = [
+    allowlist,
+    adminAllowlist,
+    modelCatalog,
+    tiers,
+    guestCircuitBreaker,
+    researchBudget,
+  ];
 
   for (const doc of docs) {
     const { _id, ...rest } = doc;

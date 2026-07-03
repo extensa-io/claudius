@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, Paperclip, Square } from "lucide-react";
+import { ArrowUp, Paperclip, Square, Telescope } from "lucide-react";
 import { useRef, useState } from "react";
 import { DocumentChips } from "./document-chips";
 import type { DocChip } from "./use-documents";
@@ -26,6 +26,9 @@ export function Composer({
   onUploadFiles,
   onRetryDoc,
   onRemoveDoc,
+  canResearch,
+  researchOn,
+  onToggleResearch,
 }: {
   onSend: (text: string) => void;
   onStop: () => void;
@@ -36,6 +39,10 @@ export function Composer({
   onUploadFiles: (files: FileList) => void;
   onRetryDoc: (id: string) => void;
   onRemoveDoc: (id: string) => void;
+  /** Research is a member/admin feature; the toggle is hidden for guests. */
+  canResearch: boolean;
+  researchOn: boolean;
+  onToggleResearch: () => void;
 }): React.ReactNode {
   const [value, setValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,7 +69,7 @@ export function Composer({
             rows={3}
             value={value}
             disabled={disabled}
-            placeholder="Message Claudius…"
+            placeholder={researchOn ? "Research a question…" : "Message Claudius…"}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -73,31 +80,48 @@ export function Composer({
             className="block max-h-48 w-full resize-none border-0 bg-transparent p-0 align-top text-sm leading-6 placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
           />
           <div className="mt-2 flex items-center justify-between">
-            {canAttach ? (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files?.length) onUploadFiles(e.target.files);
-                    // Reset so re-picking the same file fires change again.
-                    e.target.value = "";
-                  }}
-                />
+            <div className="flex items-center gap-1">
+              {canAttach && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.length) onUploadFiles(e.target.files);
+                      // Reset so re-picking the same file fires change again.
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Attach files"
+                    className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    <Paperclip className="size-4" />
+                  </button>
+                </>
+              )}
+              {canResearch && (
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label="Attach files"
-                  className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+                  onClick={onToggleResearch}
+                  aria-label="Toggle deep research"
+                  aria-pressed={researchOn}
+                  title="Deep research: runs a longer, cited investigation on the worker"
+                  className={
+                    researchOn
+                      ? "flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 h-8 text-xs font-medium text-primary"
+                      : "flex items-center gap-1.5 rounded-full px-2.5 h-8 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }
                 >
-                  <Paperclip className="size-4" />
+                  <Telescope className="size-4" />
+                  Research
                 </button>
-              </>
-            ) : (
-              <span />
-            )}
+              )}
+            </div>
             {busy ? (
               <button
                 type="button"

@@ -37,13 +37,36 @@ describe("env", () => {
     expect(env.AWS_REGION).toBe("us-east-1");
   });
 
-  it("throws naming the missing variable, without leaking values", async () => {
-    delete process.env.ADMIN_EMAIL;
-    await expect(import("./env")).rejects.toThrow(/ADMIN_EMAIL/);
+  it("throws naming a missing base variable, without leaking values", async () => {
+    // AWS_REGION is required in BOTH runtimes, so its absence fails at import.
+    delete process.env.AWS_REGION;
+    await expect(import("./env")).rejects.toThrow(/AWS_REGION/);
   });
 
   it("rejects an invalid MONGODB_URI", async () => {
     process.env.MONGODB_URI = "not-a-uri";
     await expect(import("./env")).rejects.toThrow(/MONGODB_URI/);
+  });
+
+  it("does NOT require app-only vars at import (the worker has no need of them)", async () => {
+    // A worker process carries no Auth/Google/Blob/cron secrets. Deleting them
+    // must not break importing the shared env — they are optional in the base.
+    delete process.env.AUTH_SECRET;
+    delete process.env.AUTH_GOOGLE_ID;
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    delete process.env.CRON_SECRET;
+    const { env } = await import("./env");
+    expect(env.MONGODB_URI).toContain("mongodb");
+  });
+
+  it("assertAppEnv re-validates the app-only group and names what is missing", async () => {
+    delete process.env.AUTH_GOOGLE_SECRET;
+    const { assertAppEnv } = await import("./env");
+    expect(() => assertAppEnv()).toThrow(/AUTH_GOOGLE_SECRET/);
+  });
+
+  it("assertAppEnv returns the required app secrets when present", async () => {
+    const { assertAppEnv } = await import("./env");
+    expect(assertAppEnv().ADMIN_EMAIL).toBe("admin@example.com");
   });
 });
