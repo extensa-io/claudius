@@ -1,8 +1,10 @@
 "use client";
 
 import type { DynamicToolUIPart } from "ai";
+import { Download, Telescope } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { ClaudiusUIMessage, UsedMemory } from "@/lib/chat/types";
+import { downloadReportMarkdown } from "@/lib/jobs/download";
 import { Markdown } from "./markdown";
 import { MemoryUsedChip } from "./memory-used-chip";
 import { ToolActivity } from "./tool-activity";
@@ -69,6 +71,35 @@ export function MessageList({
               key={message.id}
               className="max-w-none text-[0.95rem] leading-7"
             >
+              {message.metadata?.research && (
+                <div className="mb-2 flex items-center justify-between border-b border-border pb-2">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Telescope className="size-3.5 text-primary" />
+                    Research report
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadReportMarkdown(
+                        message.metadata?.research?.question ?? "",
+                        message.parts
+                          .filter(
+                            (p): p is { type: "text"; text: string } =>
+                              p.type === "text",
+                          )
+                          .map((p) => p.text)
+                          .join(""),
+                      )
+                    }
+                    aria-label="Download report"
+                    title="Download report as Markdown"
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    <Download className="size-3.5" />
+                    Download
+                  </button>
+                </div>
+              )}
               {message.parts.map((part, i) => {
                 if (part.type === "text") {
                   return <Markdown key={i}>{part.text}</Markdown>;

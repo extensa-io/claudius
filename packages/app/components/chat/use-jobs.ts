@@ -37,16 +37,24 @@ export function useResearchJobs({
   onConversationCreated,
   onError,
   onSettled,
+  onReportReady,
 }: {
   initialJobs: JobView[];
   onConversationCreated: (id: string, title: string) => void;
   onError: (message: string) => void;
   onSettled: () => void;
+  /** Called once when a research job finishes, so the caller can drop the report
+   * into the transcript as a message (where it stays put) instead of a card. */
+  onReportReady: (job: JobView) => void;
 }): UseResearchJobs {
   const [jobs, setJobs] = useState<JobView[]>(initialJobs);
   // Latest callbacks without retriggering the poll effect.
   const settledRef = useRef(onSettled);
   settledRef.current = onSettled;
+  const reportReadyRef = useRef(onReportReady);
+  reportReadyRef.current = onReportReady;
+  // Jobs whose report we've already handed off, so we do it exactly once.
+  const handedOff = useRef<Set<string>>(new Set());
 
   const hasActive = jobs.some(isActive);
 
@@ -71,8 +79,23 @@ export function useResearchJobs({
       if (cancelled) return;
       const updates = results.filter((j): j is JobView => j !== null);
       if (updates.length === 0) return;
+
+      // A job that just finished becomes a real message in the transcript (via
+      // onReportReady), so drop its card here — that's what keeps the report at
+      // its chronological spot instead of floating at the bottom.
+      const nowDone = updates.filter(
+        (u) => u.status === "done" && u.report && !handedOff.current.has(u.id),
+      );
+      for (const u of nowDone) {
+        handedOff.current.add(u.id);
+        reportReadyRef.current(u);
+      }
+      const droppedIds = new Set(nowDone.map((u) => u.id));
+
       setJobs((prev) =>
-        prev.map((j) => updates.find((u) => u.id === j.id) ?? j),
+        prev
+          .map((j) => updates.find((u) => u.id === j.id) ?? j)
+          .filter((j) => !droppedIds.has(j.id)),
       );
       // If any job just left the active set, let the shell refresh (sidebar
       // title/preview now that the report is in the thread).

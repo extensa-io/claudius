@@ -11,7 +11,7 @@ import {
 import { toUIMessages } from "@/lib/chat/messages";
 import { listConversationDocuments } from "@/lib/documents";
 import { errorResponse } from "@/lib/http";
-import { getConversationResearchJobs } from "@/lib/jobs/view";
+import { getActiveResearchJobViews } from "@/lib/jobs/view";
 
 export const runtime = "nodejs";
 
@@ -47,7 +47,7 @@ export async function GET(
     const [messages, documents, jobs] = await Promise.all([
       loadThreadMessages(id).then(toUIMessages),
       listConversationDocuments(userId, conversation._id!),
-      getConversationResearchJobs(userId, conversation._id!),
+      getActiveResearchJobViews(userId, conversation._id!),
     ]);
     return Response.json({
       conversation: toSummary(conversation),

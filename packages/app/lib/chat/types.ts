@@ -29,9 +29,19 @@ export interface MemoriesDataPart {
   memories: UsedMemory[];
 }
 
-/** Claudius's UIMessage shape: no metadata, two custom data parts. */
+/**
+ * Message-level metadata. A finished research report is a normal assistant
+ * message (so it sits at its chronological place in the thread and never floats),
+ * tagged with `research` so the UI can give it a "Research report" header and a
+ * download button. The question rides along for the download filename.
+ */
+export interface ClaudiusMessageMetadata {
+  research?: { question: string };
+}
+
+/** Claudius's UIMessage shape: research metadata, two custom data parts. */
 export type ClaudiusUIMessage = UIMessage<
-  never,
+  ClaudiusMessageMetadata,
   { conversation: ConversationDataPart; memories: MemoriesDataPart }
 >;
 

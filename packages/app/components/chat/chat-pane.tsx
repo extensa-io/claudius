@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { PanelLeft } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Role } from "@claudius/shared";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type { DocumentView, ModelOption } from "@/lib/chat/view-types";
@@ -51,12 +51,6 @@ export function ChatPane({
   const documents = useDocuments({ conversationId, initialDocuments });
   const [researchOn, setResearchOn] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
-  const research = useResearchJobs({
-    initialJobs,
-    onConversationCreated,
-    onError: setResearchError,
-    onSettled: onTurnComplete,
-  });
   const transport = useMemo(
     () =>
       new DefaultChatTransport<ClaudiusUIMessage>({
@@ -94,7 +88,7 @@ export function ChatPane({
     [],
   );
 
-  const { messages, sendMessage, status, stop, error } =
+  const { messages, sendMessage, setMessages, status, stop, error } =
     useChat<ClaudiusUIMessage>({
       messages: initialMessages,
       transport,
@@ -110,6 +104,42 @@ export function ChatPane({
         onTurnComplete();
       },
     });
+
+  // When a research job finishes, drop its report into the transcript as a normal
+  // turn (question + report) so it sits at its chronological place and never
+  // floats. The report is tagged `research` so it renders with a download button.
+  const onReportReady = useCallback(
+    (job: JobView): void => {
+      if (!job.report) return;
+      const reportId = `research-${job.id}-r`;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === reportId)) return prev;
+        return [
+          ...prev,
+          {
+            id: `research-${job.id}-q`,
+            role: "user",
+            parts: [{ type: "text", text: job.question ?? "" }],
+          },
+          {
+            id: reportId,
+            role: "assistant",
+            parts: [{ type: "text", text: job.report ?? "" }],
+            metadata: { research: { question: job.question ?? "" } },
+          },
+        ];
+      });
+    },
+    [setMessages],
+  );
+
+  const research = useResearchJobs({
+    initialJobs,
+    onConversationCreated,
+    onError: setResearchError,
+    onSettled: onTurnComplete,
+    onReportReady,
+  });
 
   const busy = status === "submitted" || status === "streaming";
   const isWaiting =
