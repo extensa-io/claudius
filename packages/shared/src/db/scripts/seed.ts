@@ -104,10 +104,10 @@ const guestCircuitBreaker: GuestCircuitBreakerSettings = {
 // axes. Admin-tunable in the config panel afterward.
 const researchBudget: ResearchBudgetSettings = {
   _id: "researchBudget",
-  maxSearches: 20,
-  maxFetchedPages: 12,
-  maxTokens: 400_000,
-  wallClockMs: 10 * 60 * 1000, // 10 minutes, far past Vercel's 60s function cap.
+  maxSearches: 40,
+  maxFetchedPages: 25,
+  maxTokens: 1_000_000,
+  wallClockMs: 20 * 60 * 1000, // 20 minutes, far past Vercel's 60s function cap.
 };
 
 async function main(): Promise<void> {

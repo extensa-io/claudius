@@ -171,7 +171,7 @@ export function ChatApp({
       activeId={activeId}
       onSelect={(id) => void selectConversation(id)}
       onNew={newChat}
-      onArchive={(id) => void archive(id)}
+      onArchive={archive}
       user={user}
     />
   );

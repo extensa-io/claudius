@@ -17,10 +17,10 @@ import type { ResearchBudgetSettings } from "../schemas";
 
 const DEFAULT: ResearchBudgetSettings = {
   _id: "researchBudget",
-  maxSearches: 20,
-  maxFetchedPages: 12,
-  maxTokens: 400_000,
-  wallClockMs: 10 * 60 * 1000,
+  maxSearches: 40,
+  maxFetchedPages: 25,
+  maxTokens: 1_000_000,
+  wallClockMs: 20 * 60 * 1000,
 };
 
 async function main(): Promise<void> {

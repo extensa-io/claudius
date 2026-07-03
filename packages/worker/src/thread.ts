@@ -13,7 +13,14 @@ import { getChatGraph } from "@claudius/shared";
  * appended to the existing thread exactly as a normal turn would be, keyed by the
  * conversation id. Written as one update so a thread never shows a question
  * without its report.
+ *
+ * Both messages are tagged `additional_kwargs.claudius_research` so the UI can
+ * skip them when rebuilding the transcript on reload: the research card is the
+ * canonical place the report renders (with its download button), and the tag
+ * keeps the model's context intact while avoiding a duplicate chat bubble.
  */
+const RESEARCH_TAG = { claudius_research: true };
+
 export async function appendResearchToThread(
   threadId: string,
   question: string,
@@ -24,8 +31,8 @@ export async function appendResearchToThread(
     { configurable: { thread_id: threadId } },
     {
       messages: [
-        new HumanMessage(question),
-        new AIMessage(report),
+        new HumanMessage({ content: question, additional_kwargs: RESEARCH_TAG }),
+        new AIMessage({ content: report, additional_kwargs: RESEARCH_TAG }),
       ],
     },
   );

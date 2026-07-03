@@ -1,8 +1,36 @@
 "use client";
 
-import { Loader2, Telescope, X } from "lucide-react";
+import { Download, Loader2, Telescope, X } from "lucide-react";
 import type { JobView } from "@/lib/jobs/view";
 import { Markdown } from "./markdown";
+
+/** A filesystem-safe slug from the question, for the download filename. */
+function slugify(question: string): string {
+  const slug = question
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return slug || "report";
+}
+
+/** Download the report as a Markdown file, entirely client-side (the report
+ * text is already on the job view; no round trip needed). */
+function downloadReport(job: JobView): void {
+  if (!job.report) return;
+  const heading = `# Research report\n\n**Question:** ${job.question ?? ""}\n\n`;
+  const blob = new Blob([heading + job.report], {
+    type: "text/markdown;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `research-${slugify(job.question ?? "report")}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 /**
  * A research job as it appears in the conversation: a titled card that shows live
@@ -36,6 +64,18 @@ export function ResearchCard({
             className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
           >
             <X className="size-4" />
+          </button>
+        )}
+        {job.status === "done" && job.report && (
+          <button
+            type="button"
+            onClick={() => downloadReport(job)}
+            aria-label="Download report"
+            title="Download report as Markdown"
+            className="flex items-center gap-1.5 rounded-md px-2 h-7 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <Download className="size-3.5" />
+            Download
           </button>
         )}
       </div>

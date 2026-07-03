@@ -1,13 +1,27 @@
 import { ObjectId } from "mongodb";
+import { after } from "next/server";
 import { z } from "zod";
 import { AppError, assertCanInvoke, enqueueResearchJob } from "@claudius/shared";
 import { auth } from "@/lib/auth";
 import {
   createConversation,
   getOwnedConversation,
+  setConversationTitle,
+  touchConversation,
 } from "@/lib/chat/conversations";
+import { generateTitle } from "@/lib/chat/titleGen";
 import { errorResponse } from "@/lib/http";
 import { enforceRateLimit } from "@/lib/ratelimit";
+
+/** A readable provisional title from the question, shown until the polished
+ * Haiku title lands. Trims to a word boundary so it never cuts mid-word. */
+function provisionalTitle(question: string): string {
+  const trimmed = question.replace(/\s+/g, " ").trim();
+  if (trimmed.length <= 52) return trimmed;
+  const cut = trimmed.slice(0, 52);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 20 ? cut.slice(0, lastSpace) : cut).replace(/[.,;:]+$/, "")}…`;
+}
 
 // Enqueue only — no model runs here. This returns immediately with a job id; the
 // Railway worker does the long-running research off Vercel entirely.
@@ -64,10 +78,34 @@ export const POST = auth(async (req) => {
     // message is consumed here; the worker's model calls each consume one.
     await assertCanInvoke(userId, modelId, { consumeDailyMessage: false });
 
+    const isNewConversation = conversation === null;
     if (!conversation) {
       conversation = await createConversation({ userId, role, modelId });
     }
     const conversationObjId = conversation._id!;
+
+    // A fresh research thread would otherwise sit as "New chat" with no subtitle
+    // (research never ran the chat title path). Give it an immediate provisional
+    // title and a subtitle now, then polish the title with the usual Haiku pass.
+    let title = conversation.title;
+    if (isNewConversation) {
+      title = provisionalTitle(question);
+      await setConversationTitle(userId, conversationObjId, title);
+      await touchConversation({
+        userId,
+        conversationId: conversationObjId,
+        preview: `Deep research: ${question}`,
+        modelId,
+      });
+      after(() =>
+        generateTitle({
+          userId,
+          conversationId: conversationObjId,
+          userText: question,
+          assistantText: "A deep-research report.",
+        }),
+      );
+    }
 
     const jobId = await enqueueResearchJob({
       userId,
@@ -79,7 +117,7 @@ export const POST = auth(async (req) => {
     return Response.json({
       jobId: jobId.toString(),
       conversationId: conversationObjId.toString(),
-      title: conversation.title,
+      title,
     });
   } catch (err) {
     return errorResponse(err);

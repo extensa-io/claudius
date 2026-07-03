@@ -14,7 +14,7 @@ import { toUIMessages } from "@/lib/chat/messages";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type { DocumentView } from "@/lib/chat/view-types";
 import { listConversationDocuments } from "@/lib/documents";
-import { getActiveResearchJobViews, type JobView } from "@/lib/jobs/view";
+import { getConversationResearchJobs, type JobView } from "@/lib/jobs/view";
 import { enqueueUserMemories } from "@/lib/memory/enqueue";
 
 // Node runtime: this page reaches Mongo and the checkpointer directly.
@@ -106,7 +106,7 @@ export default async function ChatPage({
       initialConversationId = c;
       [initialDocuments, initialJobs] = await Promise.all([
         listConversationDocuments(userId, conversation._id!),
-        getActiveResearchJobViews(userId, conversation._id!),
+        getConversationResearchJobs(userId, conversation._id!),
       ]);
       try {
         initialMessages = toUIMessages(await loadThreadMessages(c));

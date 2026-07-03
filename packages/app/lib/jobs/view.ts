@@ -47,18 +47,21 @@ export function serializeJob(job: WithId<Job>): JobView {
 }
 
 /**
- * The ACTIVE research jobs for a conversation, for seeding the client on load or
- * conversation switch. We return only queued/running jobs: a completed report is
- * already in the thread transcript (the worker appends it), so a done job would
- * double-render as both a card and a chat message. Live sessions keep showing a
- * just-completed card from client state; this is purely the reload seed.
+ * The research jobs for a conversation, for seeding the client on load or
+ * conversation switch. Includes finished (done/failed) as well as in-flight jobs
+ * so their cards — and the report download — persist across reloads. The report
+ * message the worker appends to the thread is tagged and folded out of the
+ * transcript (see toUIMessages), so the card is the single place it renders.
+ * Cancelled jobs are dropped as noise. Returned oldest-first so cards read in the
+ * order the research happened.
  */
-export async function getActiveResearchJobViews(
+export async function getConversationResearchJobs(
   userId: ObjectId,
   conversationId: ObjectId,
 ): Promise<JobView[]> {
   const jobs = await listConversationJobs(userId, conversationId);
   return jobs
-    .filter((j) => j.type === "research" && (j.status === "queued" || j.status === "running"))
-    .map(serializeJob);
+    .filter((j) => j.type === "research" && j.status !== "cancelled")
+    .map(serializeJob)
+    .reverse();
 }

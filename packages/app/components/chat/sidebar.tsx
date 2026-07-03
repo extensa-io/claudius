@@ -1,8 +1,9 @@
 "use client";
 
-import { Archive, Brain, Plus, Shield } from "lucide-react";
+import { Archive, Brain, Loader2, Plus, Shield } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { useState } from "react";
 import type { ConversationSummary } from "@/lib/chat/view-types";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
@@ -35,10 +36,28 @@ export function Sidebar({
   activeId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
-  onArchive: (id: string) => void;
+  onArchive: (id: string) => Promise<void>;
   user: SidebarUser;
 }): React.ReactNode {
   const visible = conversations.filter((c) => !c.archived);
+
+  // Archiving hits the network and takes a beat; track in-flight ids so the
+  // button shows a spinner and ignores repeat clicks (otherwise the lack of
+  // feedback makes people click it several times).
+  const [archiving, setArchiving] = useState<ReadonlySet<string>>(new Set());
+  const handleArchive = async (id: string): Promise<void> => {
+    if (archiving.has(id)) return;
+    setArchiving((prev) => new Set(prev).add(id));
+    try {
+      await onArchive(id);
+    } finally {
+      setArchiving((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -108,10 +127,18 @@ export function Sidebar({
                 <button
                   type="button"
                   aria-label="Archive conversation"
-                  onClick={() => onArchive(c.id)}
-                  className="absolute top-1.5 right-1.5 hidden rounded p-1 text-warning hover:bg-warning/10 group-hover:block"
+                  onClick={() => void handleArchive(c.id)}
+                  disabled={archiving.has(c.id)}
+                  className={cn(
+                    "absolute top-1.5 right-1.5 rounded p-1 text-warning hover:bg-warning/10 disabled:opacity-100",
+                    archiving.has(c.id) ? "block" : "hidden group-hover:block",
+                  )}
                 >
-                  <Archive className="size-3.5" />
+                  {archiving.has(c.id) ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Archive className="size-3.5" />
+                  )}
                 </button>
               </li>
             ))}
