@@ -4,6 +4,7 @@
 export {
   enqueueResearchJob,
   enqueueMemoryExtractionJob,
+  enqueueMemoryConsolidationJob,
   type EnqueueResearchParams,
   type EnqueueMemoryParams,
 } from "./enqueue";

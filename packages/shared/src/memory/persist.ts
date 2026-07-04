@@ -118,6 +118,9 @@ function buildMemoryDoc(params: {
     userId: params.userId,
     content: params.candidate.content,
     category: params.candidate.category,
+    // Salience carried from extraction (Phase 6). Drives retrieval ranking and
+    // profile selection; editable later in the /memories UI.
+    importance: params.candidate.importance,
     embedding: params.embedding,
     sourceConversationId: params.sourceConversationId,
     createdAt: now,
@@ -190,9 +193,11 @@ export async function persistCandidate(params: {
     const inserted = await col.insertOne(doc);
     const newId = inserted.insertedId;
     if (!newId) throw new Error("Memory insert returned no id.");
+    // Tag the reason so the UI can tell a Phase 3 same-category update apart
+    // from a Phase 6 cross-category merge in the lineage view.
     await col.updateOne(
       { _id: best._id, userId },
-      { $set: { supersededBy: newId } },
+      { $set: { supersededBy: newId, supersededReason: "update" } },
     );
     return {
       action: "superseded",

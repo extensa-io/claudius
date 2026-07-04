@@ -11,7 +11,8 @@ import {
 } from "@langchain/langgraph";
 import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
 import { ObjectId } from "mongodb";
-import { retrieveMemories } from "../memory/retrieve";
+import { getProfileMemories, retrieveMemories } from "../memory/retrieve";
+import type { RetrievedMemory } from "../memory/types";
 import { getCheckpointer } from "./checkpointer";
 import { buildChatModel } from "./model";
 import { attachedDocumentsNote, memoriesNote, SYSTEM_PROMPT } from "./prompts";
@@ -83,12 +84,41 @@ function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
   return configurable as ChatGraphConfigurable;
 }
 
+/** How many recent human turns feed the retrieval query (Phase 6). */
+const QUERY_WINDOW_HUMAN_TURNS = 3;
+/** Cap the constructed query so a long paste doesn't dominate the embedding. */
+const QUERY_MAX_CHARS = 1000;
+
 /**
- * `load_context`: retrieve the user's relevant long-term memories for this turn
- * and stash them in `memoryContext` for the agent node to inject. When memory is
- * off for the user, or nothing clears the similarity floor, it clears the
- * channel and injects nothing (never pad). On a hit it also dispatches a custom
- * event so the route can surface the "used N memories" chip in real time.
+ * Build the retrieval query from the last few human turns, not just the final
+ * utterance (Phase 6, scope item 3). A thin or contentless message ("who am I?",
+ * "and after that?") embeds nowhere near a stored declarative fact on its own;
+ * folding in the recent turn context gives follow-ups and pronoun references
+ * something to match. Chronological order, current message last, bounded length.
+ */
+function buildRetrievalQuery(state: GraphState): string {
+  const humanTexts = state.messages
+    .filter((m) => m.getType() === "human")
+    .map((m) => m.text.trim())
+    .filter((t) => t.length > 0);
+  const recent = humanTexts.slice(-QUERY_WINDOW_HUMAN_TURNS);
+  return recent.join("\n").slice(-QUERY_MAX_CHARS).trim();
+}
+
+/**
+ * `load_context`: assemble the two memory paths for this turn and stash the
+ * combined block in `memoryContext` for the agent node to inject.
+ *
+ *   1. The always-on profile — the user's defining identity memories, injected
+ *      every turn regardless of vector score, so identity is present even on a
+ *      turn that resembles no stored fact.
+ *   2. Salience-weighted retrieval — the task-relevant vector match for the
+ *      constructed query, with the profile's rows excluded so nothing repeats.
+ *
+ * When memory is off for the user, or neither path returns anything, it clears
+ * the channel and injects nothing (never pad). On any memory it dispatches a
+ * custom event tagging each as profile vs retrieved, so the route can surface
+ * the "used N memories" chip (split by source) in real time.
  *
  * Retrieval failures are swallowed to an empty context: a memory lookup must
  * never break a chat turn.
@@ -100,18 +130,24 @@ async function loadContext(
   const { userId, memoryEnabled } = readConfigurable(config);
   if (!userId || memoryEnabled === false) return { memoryContext: "" };
 
-  // The latest human message is what we retrieve against.
-  const lastHuman = [...state.messages]
-    .reverse()
-    .find((m) => m.getType() === "human");
-  const text = lastHuman?.text?.trim() ?? "";
-  if (text.length === 0) return { memoryContext: "" };
+  const ownerId = new ObjectId(userId);
+  const query = buildRetrievalQuery(state);
 
   try {
-    const memories = await retrieveMemories(new ObjectId(userId), text);
-    if (memories.length === 0) return { memoryContext: "" };
-    await dispatchCustomEvent(MEMORIES_USED_EVENT, { memories }, config);
-    return { memoryContext: memoriesNote(memories) };
+    // Profile first: it's cheap (no vector search) and its ids exclude the
+    // retrieval path from re-injecting the same fact.
+    const profile = await getProfileMemories(ownerId);
+    const profileIds = profile.map((m) => m.id);
+    const retrieved =
+      query.length > 0
+        ? await retrieveMemories(ownerId, query, profileIds)
+        : [];
+
+    const all: RetrievedMemory[] = [...profile, ...retrieved];
+    if (all.length === 0) return { memoryContext: "" };
+
+    await dispatchCustomEvent(MEMORIES_USED_EVENT, { memories: all }, config);
+    return { memoryContext: memoriesNote({ profile, retrieved }) };
   } catch (err) {
     console.error(
       "Memory retrieval failed in load_context:",

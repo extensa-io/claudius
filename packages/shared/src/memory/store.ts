@@ -10,13 +10,16 @@ import { embedTexts } from "../embeddings/voyage";
  * a corrected memory stays retrievable by its new wording.
  */
 
-export type MemorySort = "newest" | "oldest" | "last_used";
+export type MemorySort = "newest" | "oldest" | "last_used" | "important";
 
-/** A predecessor in a supersession chain, for the "replaced an earlier" pill. */
+/** A predecessor in a supersession chain, for the "replaced an earlier" pill.
+ * `reason` (Phase 6) tells an update apart from a consolidation merge, so the UI
+ * can label lineage "replaced" vs "merged in". Absent rows read as "update". */
 export interface SupersededRef {
   id: string;
   content: string;
   replacedAt: string;
+  reason: "update" | "merge";
   sourceConversationTitle: string | null;
 }
 
@@ -25,11 +28,13 @@ export interface MemoryView {
   id: string;
   content: string;
   category: MemoryCategory;
+  /** 0..1 salience: drives retrieval ranking and profile membership (Phase 6). */
+  importance: number;
   createdAt: string;
   lastAccessedAt: string;
   sourceConversationId: string;
   sourceConversationTitle: string | null;
-  /** Immediate predecessor(s) this memory replaced, if any (one level). */
+  /** Immediate predecessor(s) this memory replaced or merged, if any. */
   supersedes: SupersededRef[];
 }
 
@@ -51,6 +56,9 @@ function sortSpec(sort: MemorySort): Record<string, 1 | -1> {
       return { createdAt: 1 };
     case "last_used":
       return { lastAccessedAt: -1 };
+    // Most defining first, newest breaking ties — mirrors the profile's order.
+    case "important":
+      return { importance: -1, createdAt: -1 };
     case "newest":
     default:
       return { createdAt: -1 };
@@ -126,6 +134,7 @@ export async function listMemories(
       content: p.content,
       // The predecessor was replaced when this memory was created.
       replacedAt: m.createdAt.toISOString(),
+      reason: p.supersededReason ?? "update",
       sourceConversationTitle:
         titles.get(p.sourceConversationId.toString()) ?? null,
     }));
@@ -133,6 +142,7 @@ export async function listMemories(
       id,
       content: m.content,
       category: m.category,
+      importance: m.importance ?? 0.5,
       createdAt: m.createdAt.toISOString(),
       lastAccessedAt: m.lastAccessedAt.toISOString(),
       sourceConversationId: m.sourceConversationId.toString(),
@@ -168,6 +178,7 @@ export async function getSupersessionChain(
       id: predecessor._id.toString(),
       content: predecessor.content,
       replacedAt: predecessor.lastAccessedAt.toISOString(),
+      reason: predecessor.supersededReason ?? "update",
       sourceConversationTitle:
         title.get(predecessor.sourceConversationId.toString()) ?? null,
     });
@@ -193,6 +204,27 @@ export async function editMemory(
   const result = await col.updateOne(
     { _id: new ObjectId(memoryId), userId },
     { $set: { content: trimmed, embedding } },
+  );
+  return result.matchedCount > 0;
+}
+
+/**
+ * Set a memory's importance (Phase 6). Clamped to [0, 1]; no re-embed needed
+ * since salience doesn't change the vector, only the ranking blend and profile
+ * membership. Owner-scoped; false if the memory isn't theirs. This is what makes
+ * "raise a memory's importance and watch its ranking change" a user action.
+ */
+export async function setImportance(
+  userId: ObjectId,
+  memoryId: string,
+  importance: number,
+): Promise<boolean> {
+  if (!ObjectId.isValid(memoryId)) return false;
+  const clamped = Math.min(1, Math.max(0, importance));
+  const col = await memoriesCol();
+  const result = await col.updateOne(
+    { _id: new ObjectId(memoryId), userId },
+    { $set: { importance: clamped } },
   );
   return result.matchedCount > 0;
 }

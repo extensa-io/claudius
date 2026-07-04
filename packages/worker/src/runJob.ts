@@ -1,6 +1,7 @@
 import type { WithId } from "mongodb";
 import { failJob, isAppError, type Job } from "@claudius/shared";
 import { log, errMsg } from "./log";
+import { runMemoryConsolidationJob } from "./memory/consolidate";
 import { runMemoryExtractionJob } from "./memory/run";
 import { runResearchJob } from "./research/run";
 
@@ -21,6 +22,9 @@ export async function runJob(job: WithId<Job>): Promise<void> {
         break;
       case "memory_extraction":
         await runMemoryExtractionJob(job);
+        break;
+      case "memory_consolidation":
+        await runMemoryConsolidationJob(job);
         break;
     }
   } catch (err) {

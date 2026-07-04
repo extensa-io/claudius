@@ -20,6 +20,22 @@ const CATEGORY_LABEL: Record<MemoryView["category"], string> = {
   context: "Context",
 };
 
+/**
+ * Importance is a 0..1 float the model sets and the user adjusts. We present it
+ * as three bands (Phase 6) so editing is a click, not a slider guess: Minor,
+ * Normal, Defining map to representative values, and the float lands in whichever
+ * band contains it. Defining rows are the ones the always-on profile draws from.
+ */
+const IMPORTANCE_BANDS = [
+  { label: "Minor", value: 0.2, max: 0.34 },
+  { label: "Normal", value: 0.5, max: 0.67 },
+  { label: "Defining", value: 0.9, max: 1.01 },
+] as const;
+
+function bandIndex(importance: number): number {
+  return IMPORTANCE_BANDS.findIndex((b) => importance < b.max);
+}
+
 function CategoryPill({
   category,
 }: {
@@ -62,11 +78,13 @@ export function MemoryCard({
   memory,
   onEdit,
   onDelete,
+  onSetImportance,
   fetchChain,
 }: {
   memory: MemoryView;
   onEdit: (id: string, content: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onSetImportance: (id: string, importance: number) => Promise<void>;
   fetchChain: (id: string) => Promise<SupersededRef[]>;
 }): React.ReactNode {
   const [editing, setEditing] = useState(false);
@@ -76,6 +94,7 @@ export function MemoryCard({
   const [chain, setChain] = useState<SupersededRef[] | null>(null);
 
   const hasHistory = memory.supersedes.length > 0;
+  const activeBand = bandIndex(memory.importance);
 
   const save = async (): Promise<void> => {
     const next = draft.trim();
@@ -166,6 +185,39 @@ export function MemoryCard({
         <span>last used {timeAgo(memory.lastAccessedAt)}</span>
       </div>
 
+      <div className="mt-2 flex items-center gap-2">
+        <span className="text-[0.7rem] uppercase tracking-wide text-muted-foreground/70">
+          Importance
+        </span>
+        <div className="inline-flex overflow-hidden rounded-md border border-border">
+          {IMPORTANCE_BANDS.map((band, i) => {
+            const active = i === activeBand;
+            return (
+              <button
+                key={band.label}
+                type="button"
+                disabled={active}
+                onClick={() => void onSetImportance(memory.id, band.value)}
+                className={cn(
+                  "px-2 py-0.5 text-[0.7rem] transition-colors",
+                  active
+                    ? "bg-primary/15 font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  i > 0 && "border-l border-border",
+                )}
+                title={
+                  band.label === "Defining"
+                    ? "Defining memories are always available as your profile"
+                    : undefined
+                }
+              >
+                {band.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {hasHistory && (
         <div className="mt-2">
           <button
@@ -174,7 +226,9 @@ export function MemoryCard({
             className="flex items-center gap-1 text-xs text-primary hover:underline"
           >
             <CornerDownRight className="size-3" />
-            replaced an earlier memory
+            {memory.supersedes.some((s) => s.reason === "merge")
+              ? "consolidated from earlier memories"
+              : "replaced an earlier memory"}
           </button>
           {expanded && (
             <ul className="mt-2 space-y-1.5 border-l border-border pl-3">
@@ -184,7 +238,8 @@ export function MemoryCard({
                     {old.content}
                   </span>
                   <span className={cn("mt-0.5 block text-[0.7rem] opacity-80")}>
-                    replaced {timeAgo(old.replacedAt)}
+                    {old.reason === "merge" ? "merged in" : "replaced"}{" "}
+                    {timeAgo(old.replacedAt)}
                     {old.sourceConversationTitle
                       ? ` · from ‘${old.sourceConversationTitle}’`
                       : ""}

@@ -7,13 +7,18 @@ export {
   MemoryCandidateSchema,
   ExtractionOutputSchema,
   type RetrievedMemory,
+  type MemorySource,
   type PersistOutcome,
   type ExtractionSummary,
 } from "./types";
 export { extractCandidates, CONFIDENCE_THRESHOLD } from "./extract";
 export { persistCandidate } from "./persist";
-export { retrieveMemories } from "./retrieve";
+export { retrieveMemories, getProfileMemories } from "./retrieve";
 export { processConversationMemories } from "./process";
+export {
+  consolidateUserMemories,
+  type ConsolidationSummary,
+} from "./consolidate";
 export {
   type MemorySort,
   type MemoryView,
@@ -23,6 +28,7 @@ export {
   listMemories,
   getSupersessionChain,
   editMemory,
+  setImportance,
   deleteMemory,
   getMemorySettings,
   setMemoryEnabled,

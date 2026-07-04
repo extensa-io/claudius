@@ -2,32 +2,49 @@ import { ObjectId } from "mongodb";
 import { describe, expect, it, vi } from "vitest";
 
 /**
- * Pins two things about memory retrieval:
+ * Pins the memory retrieval contract:
  *   1. The security invariant (CLAUDE.md #1): the vector search is ALWAYS
  *      pre-filtered by the owning userId, never post-filtered, and superseded
- *      memories are excluded.
- *   2. The post-Phase-3 calibration: the similarity floor is applied in code
- *      (not the pipeline) so a never-blind fallback can return the top few
- *      memories even when none clears the floor.
- * We assert against the aggregation pipeline the function builds and against the
- * selection behaviour, rather than a live Atlas query.
+ *      memories are excluded — for both the retrieval and profile paths.
+ *   2. The Phase 6 ranking: importance blends into the score so a defining fact
+ *      outranks a trivial phrase-match, adaptive thresholding keeps the relevant
+ *      band, and the never-blind fallback still returns the top few on a miss.
+ *   3. The always-on profile: highest-importance identity rows, chosen without a
+ *      vector search and tagged as `profile`.
+ * We assert against the aggregation/query the functions build and their
+ * selection behaviour, not a live Atlas query.
  */
 
-const { aggregateSpy, updateManySpy, pipelines, setHits } = vi.hoisted(() => {
-  const pipelines: unknown[][] = [];
-  let hits: unknown[] = [];
-  return {
-    pipelines,
-    setHits: (next: unknown[]) => {
-      hits = next;
-    },
-    updateManySpy: vi.fn(async () => ({})),
-    aggregateSpy: vi.fn((pipeline: unknown[]) => {
-      pipelines.push(pipeline);
-      return { toArray: async () => hits };
-    }),
-  };
-});
+const { aggregateSpy, updateManySpy, findSpy, pipelines, setHits, setProfileRows } =
+  vi.hoisted(() => {
+    const pipelines: unknown[][] = [];
+    let hits: unknown[] = [];
+    let profileRows: unknown[] = [];
+    const chain = {
+      sort: () => chain,
+      limit: () => chain,
+      project: () => chain,
+      toArray: async () => profileRows,
+    };
+    return {
+      pipelines,
+      setHits: (next: unknown[]) => {
+        hits = next;
+      },
+      setProfileRows: (next: unknown[]) => {
+        profileRows = next;
+      },
+      updateManySpy: vi.fn(async () => ({})),
+      findSpy: vi.fn((filter?: unknown) => {
+        void filter; // recorded via mock.calls; referenced to satisfy lint
+        return chain;
+      }),
+      aggregateSpy: vi.fn((pipeline: unknown[]) => {
+        pipelines.push(pipeline);
+        return { toArray: async () => hits };
+      }),
+    };
+  });
 
 vi.mock("../embeddings/voyage", () => ({
   embedQuery: vi.fn(async () => [0.1, 0.2, 0.3]),
@@ -37,10 +54,11 @@ vi.mock("../db/collections", () => ({
   memoriesCol: vi.fn(async () => ({
     aggregate: aggregateSpy,
     updateMany: updateManySpy,
+    find: findSpy,
   })),
 }));
 
-const { retrieveMemories } = await import("./retrieve");
+const { retrieveMemories, getProfileMemories } = await import("./retrieve");
 
 interface VectorSearchStage {
   $vectorSearch: { filter: { userId: { $eq: ObjectId } } };
@@ -49,12 +67,13 @@ interface MatchStage {
   $match?: { supersededBy?: unknown };
 }
 
-function hit(content: string, score: number) {
+function hit(content: string, score: number, importance = 0.5) {
   return {
     _id: new ObjectId(),
     content,
     category: "fact" as const,
     score,
+    importance,
   };
 }
 
@@ -72,13 +91,10 @@ describe("retrieveMemories pre-filter", () => {
       VectorSearchStage & MatchStage
     >;
 
-    // Pre-filter is exactly this user, never another.
     const filter = pipeline[0]!.$vectorSearch.filter;
     expect(filter.userId.$eq.equals(userId)).toBe(true);
     expect(filter.userId.$eq.equals(new ObjectId())).toBe(false);
 
-    // A later $match drops superseded memories. The score floor is NOT in the
-    // pipeline anymore — it's applied in code so the fallback can reach below it.
     const match = pipeline.find((s) => s.$match)?.$match;
     expect(match?.supersededBy).toBeNull();
   });
@@ -90,33 +106,84 @@ describe("retrieveMemories pre-filter", () => {
     expect(aggregateSpy).not.toHaveBeenCalled();
     expect(out).toEqual([]);
   });
+
+  it("tags retrieved memories with source 'retrieved'", async () => {
+    setHits([hit("a", 0.7), hit("b", 0.66), hit("c", 0.62)]);
+    const out = await retrieveMemories(new ObjectId(), "what do I do?");
+    expect(out.length).toBeGreaterThan(0);
+    expect(out.every((m) => m.source === "retrieved")).toBe(true);
+  });
 });
 
-describe("retrieveMemories floor and never-blind fallback", () => {
-  it("returns only memories that clear the floor when enough do", async () => {
+describe("retrieveMemories salience blend", () => {
+  it("lifts a defining memory above a higher-scoring trivial one", async () => {
+    // Trivial phrase-match scores higher on cosine, but the defining fact's
+    // importance blends it to the top — the Phase 6 fix for a flat store.
     setHits([
-      hit("a", 0.7),
-      hit("b", 0.66),
-      hit("c", 0.61),
-      hit("weak", 0.4),
+      hit("trivial", 0.66, 0.1),
+      hit("defining", 0.6, 0.95),
     ]);
-    const out = await retrieveMemories(new ObjectId(), "what do I do?");
-    const contents = out.map((m) => m.content);
-    expect(contents).toEqual(["a", "b", "c"]);
-    expect(contents).not.toContain("weak");
+    const out = await retrieveMemories(new ObjectId(), "who am I?");
+    expect(out[0]?.content).toBe("defining");
   });
 
-  it("falls back to the top few by score when none clears the floor", async () => {
-    setHits([
-      hit("x", 0.52),
-      hit("y", 0.51),
-      hit("z", 0.5),
-      hit("w", 0.48),
+  it("excludes profile ids so the two paths don't double-inject", async () => {
+    const shared = hit("in-profile", 0.8);
+    setHits([shared, hit("fresh", 0.7)]);
+    const out = await retrieveMemories(new ObjectId(), "what do I do?", [
+      shared._id.toString(),
     ]);
+    const contents = out.map((m) => m.content);
+    expect(contents).toContain("fresh");
+    expect(contents).not.toContain("in-profile");
+  });
+});
+
+describe("retrieveMemories adaptive threshold + never-blind", () => {
+  it("keeps the band around the top blended score when enough clear it", async () => {
+    setHits([hit("x", 0.7), hit("y", 0.66), hit("z", 0.61), hit("w", 0.4)]);
+    const out = await retrieveMemories(new ObjectId(), "what do I do?");
+    // w is far below the band and the floor; it must never appear.
+    expect(out.map((m) => m.content)).not.toContain("w");
+  });
+
+  it("falls back to the top few by blended score when none clears the band", async () => {
+    setHits([hit("x", 0.52), hit("y", 0.51), hit("z", 0.5), hit("w", 0.48)]);
     const out = await retrieveMemories(new ObjectId(), "do you know who I am?");
     const contents = out.map((m) => m.content);
-    // MIN_INJECT top-3 by score, so the model is never fully blind.
-    expect(contents).toEqual(["x", "y", "z"]);
+    expect(contents).toContain("x");
     expect(contents).not.toContain("w");
+    expect(contents.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("getProfileMemories", () => {
+  it("returns defining rows tagged as profile, owner-scoped", async () => {
+    findSpy.mockClear();
+    setProfileRows([
+      { _id: new ObjectId(), content: "Developer Advocate at MongoDB", category: "fact" },
+      { _id: new ObjectId(), content: "Based in Montreal", category: "fact" },
+    ]);
+    const userId = new ObjectId();
+    const out = await getProfileMemories(userId);
+
+    // The find filter is the owner, active rows, above the profile importance bar.
+    const filter = findSpy.mock.calls[0]![0] as unknown as {
+      userId: ObjectId;
+      supersededBy: null;
+      importance: { $gte: number };
+    };
+    expect(filter.userId.equals(userId)).toBe(true);
+    expect(filter.supersededBy).toBeNull();
+    expect(filter.importance.$gte).toBeGreaterThan(0.5);
+
+    expect(out).toHaveLength(2);
+    expect(out.every((m) => m.source === "profile")).toBe(true);
+  });
+
+  it("returns an empty profile when no row is defining enough", async () => {
+    setProfileRows([]);
+    const out = await getProfileMemories(new ObjectId());
+    expect(out).toEqual([]);
   });
 });

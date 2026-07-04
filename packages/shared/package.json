@@ -16,6 +16,7 @@
     "db:migrate:memory": "tsx --env-file=../../.env src/db/scripts/migrate-phase3-memory.ts",
     "db:migrate:admin": "tsx --env-file=../../.env src/db/scripts/migrate-phase4-admin.ts",
     "db:migrate:research": "tsx --env-file=../../.env src/db/scripts/migrate-phase5-research.ts",
+    "db:migrate:memory-management": "tsx --env-file=../../.env src/db/scripts/migrate-phase6-memory-management.ts",
     "db:sync:pricing": "tsx --env-file=../../.env src/db/scripts/sync-bedrock-pricing.ts"
   },
   "devDependencies": {

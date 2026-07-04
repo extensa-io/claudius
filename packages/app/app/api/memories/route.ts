@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 const QuerySchema = z.object({
   category: z.enum(["fact", "preference", "context"]).optional(),
-  sort: z.enum(["newest", "oldest", "last_used"]).optional(),
+  sort: z.enum(["newest", "oldest", "last_used", "important"]).optional(),
   q: z.string().max(200).optional(),
 });
 

@@ -24,6 +24,7 @@ const CATEGORY_CHIPS: Array<{ value: CategoryFilter; label: string }> = [
 
 const SORT_OPTIONS: Array<{ value: MemorySort; label: string }> = [
   { value: "newest", label: "Newest" },
+  { value: "important", label: "Most defining" },
   { value: "last_used", label: "Last used" },
   { value: "oldest", label: "Oldest" },
 ];
@@ -96,6 +97,21 @@ export function MemoriesView({
         setMemories((prev) => prev.filter((m) => m.id !== id));
         setCount((c) => Math.max(0, c - 1));
       }
+    },
+    [],
+  );
+
+  const handleSetImportance = useCallback(
+    async (id: string, importance: number): Promise<void> => {
+      // Optimistic: reflect the new band immediately, then persist.
+      setMemories((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, importance } : m)),
+      );
+      await fetch(`/api/memories/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ importance }),
+      });
     },
     [],
   );
@@ -223,6 +239,7 @@ export function MemoriesView({
                   memory={memory}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onSetImportance={handleSetImportance}
                   fetchChain={fetchChain}
                 />
               ))

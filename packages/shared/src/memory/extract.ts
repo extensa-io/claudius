@@ -46,10 +46,16 @@ Classify each memory:
 
 For each memory set "confidence" from 0 to 1: how sure you are it is durable and worth remembering. Be strict; when in doubt, lower it.
 
+Also set "importance" from 0 to 1: how central this is to who the user is, independent of how sure you are. This is a DIFFERENT axis from confidence.
+- 0.8 to 1.0: defining identity — role or profession, where they live, languages they speak, their name, the core of what they work on.
+- 0.4 to 0.7: durable but ordinary — a tool preference, an ongoing project, a habit.
+- 0.0 to 0.3: real but minor — an incidental detail that rarely shapes how to help them.
+A fact can be certain but minor (high confidence, low importance) or defining but softly implied (lower confidence, high importance). Judge the two independently.
+
 Write each memory as a short third-person statement about the user (for example "Prefers Vitest over Jest for testing"). Merge duplicates. If nothing is worth remembering, return an empty list.
 
 Respond with ONLY a JSON object of the form:
-{"memories":[{"content":"...","category":"fact|preference|context","confidence":0.0}]}
+{"memories":[{"content":"...","category":"fact|preference|context","confidence":0.0,"importance":0.0}]}
 No prose, no markdown fences.`;
 
 interface UsageMetadata {

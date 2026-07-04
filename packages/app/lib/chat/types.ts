@@ -13,11 +13,15 @@ export interface ConversationDataPart {
   title: string;
 }
 
-/** A single memory the agent recalled this turn, for the "used" chip. */
+/** A single memory the agent used this turn, for the "used" chip. `source`
+ * (Phase 6) separates the always-on identity profile from this turn's retrieval,
+ * so the chip can show "2 from your profile · 3 recalled". Absent reads as
+ * retrieved (older turns before the split). */
 export interface UsedMemory {
   id: string;
   content: string;
   category: "fact" | "preference" | "context";
+  source?: "profile" | "retrieved";
 }
 
 /**

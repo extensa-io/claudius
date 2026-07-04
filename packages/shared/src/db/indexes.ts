@@ -60,6 +60,19 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
   created.push("memories.expiresAt_ttl");
 
+  // Phase 6: the always-on profile query runs on EVERY chat turn — the user's
+  // active memories, highest importance first. This compound index serves it
+  // directly (equality on userId + supersededBy, then the importance/recency
+  // sort) so the resident block never costs a per-turn collection scan. It also
+  // covers the /memories list's active-by-recency reads.
+  await db
+    .collection(COLLECTIONS.memories)
+    .createIndex(
+      { userId: 1, supersededBy: 1, importance: -1, lastAccessedAt: -1 },
+      { name: "userId_active_importance" },
+    );
+  created.push("memories.userId_active_importance");
+
   // --- rate_limits: per-user sliding window (Phase 4) -------------------
   // One document per (userId, key); the unique compound index makes the
   // limiter's upsert race-safe. A TTL on updatedAt reaps rows a user has

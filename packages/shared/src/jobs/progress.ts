@@ -2,6 +2,7 @@ import type { ObjectId, UpdateFilter } from "mongodb";
 import { jobsCol } from "../db/collections";
 import type {
   Job,
+  MemoryConsolidationJobResult,
   MemoryExtractionJobResult,
   ResearchJobResult,
 } from "../db/schemas";
@@ -25,7 +26,10 @@ export async function appendJobProgress(
   );
 }
 
-type JobResult = ResearchJobResult | MemoryExtractionJobResult;
+type JobResult =
+  | ResearchJobResult
+  | MemoryExtractionJobResult
+  | MemoryConsolidationJobResult;
 
 /** Mark a running job done with its result. No-op if it was cancelled first. */
 export async function completeJob(

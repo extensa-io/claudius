@@ -1,6 +1,10 @@
 import { ObjectId } from "mongodb";
 import { jobsCol } from "../db/collections";
-import { MemoryExtractionJobSchema, ResearchJobSchema } from "../db/schemas";
+import {
+  MemoryConsolidationJobSchema,
+  MemoryExtractionJobSchema,
+  ResearchJobSchema,
+} from "../db/schemas";
 
 /**
  * Enqueue helpers — the app (and the memory cron) insert work here; the worker
@@ -88,6 +92,43 @@ export async function enqueueMemoryExtractionJob(
     startedAt: null,
     finishedAt: null,
     ...(params.expiresAt ? { expiresAt: params.expiresAt } : {}),
+  });
+  const res = await col.insertOne(job);
+  return res.insertedId;
+}
+
+/**
+ * Enqueue a per-user memory consolidation job (Phase 6), deduped: if one is
+ * already queued or running for this user, skip and return null. The daily cron
+ * enqueues the full memory-eligible set, so dedup keeps a slow worker from
+ * stacking duplicate passes over the same store. Members/admins only — guest
+ * memories are ephemeral (TTL), so there's nothing to consolidate.
+ */
+export async function enqueueMemoryConsolidationJob(
+  userId: ObjectId,
+): Promise<ObjectId | null> {
+  const col = await jobsCol();
+
+  const existing = await col.findOne({
+    type: "memory_consolidation",
+    userId,
+    status: { $in: ["queued", "running"] },
+  });
+  if (existing) return null;
+
+  const job = MemoryConsolidationJobSchema.parse({
+    type: "memory_consolidation",
+    userId,
+    // No owning conversation: consolidation spans the whole store.
+    conversationId: null,
+    status: "queued",
+    input: {},
+    result: null,
+    progress: [],
+    error: null,
+    createdAt: new Date(),
+    startedAt: null,
+    finishedAt: null,
   });
   const res = await col.insertOne(job);
   return res.insertedId;

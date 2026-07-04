@@ -83,6 +83,20 @@ export type MemoryExtractionJobResult = z.infer<
   typeof MemoryExtractionJobResultSchema
 >;
 
+/** A consolidation job is per-USER (not per-conversation); no extra input. */
+export const MemoryConsolidationJobInputSchema = z.object({});
+
+/** Consolidation tallies, mirroring the shared ConsolidationSummary. */
+export const MemoryConsolidationJobResultSchema = z.object({
+  clustersMerged: z.number().int().nonnegative(),
+  memoriesMerged: z.number().int().nonnegative(),
+  pruned: z.number().int().nonnegative(),
+  status: z.string(),
+});
+export type MemoryConsolidationJobResult = z.infer<
+  typeof MemoryConsolidationJobResultSchema
+>;
+
 // Fields every job carries, regardless of type. Spread into each variant so the
 // discriminated union stays honest (one `type` literal per branch) without a
 // separate base type the union members would have to intersect.
@@ -126,11 +140,27 @@ export const MemoryExtractionJobSchema = z.object({
   result: MemoryExtractionJobResultSchema.nullable(),
 });
 
+// Consolidation runs over a user's whole store, not one conversation, so this
+// branch overrides conversationId to null (the spread's non-null default is
+// wrong here). It's the one job type with no owning thread; the UI never lists
+// it as a conversation card, and it carries no expiresAt (members/admins only).
+export const MemoryConsolidationJobSchema = z.object({
+  ...baseJobFields,
+  conversationId: zObjectId.nullable(),
+  type: z.literal("memory_consolidation"),
+  input: MemoryConsolidationJobInputSchema,
+  result: MemoryConsolidationJobResultSchema.nullable(),
+});
+
 export const JobSchema = z.discriminatedUnion("type", [
   ResearchJobSchema,
   MemoryExtractionJobSchema,
+  MemoryConsolidationJobSchema,
 ]);
 export type Job = z.infer<typeof JobSchema>;
 export type ResearchJob = z.infer<typeof ResearchJobSchema>;
 export type MemoryExtractionJob = z.infer<typeof MemoryExtractionJobSchema>;
+export type MemoryConsolidationJob = z.infer<
+  typeof MemoryConsolidationJobSchema
+>;
 export type JobType = Job["type"];

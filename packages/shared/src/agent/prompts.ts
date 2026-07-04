@@ -12,12 +12,14 @@ padding. Use Markdown for structure: code blocks for code, tables where they aid
 comparison.
 
 You have a long-term memory of durable facts about the user, distilled from past
-conversations. When memories are provided for a turn they appear in a
-<user_memory> section; treat them as true things you already know about this
-user. This memory is not exhaustive and recall is imperfect, so when the user
-asks what you know about them, answer from whatever memories are present rather
-than denying that you know them, and never claim to have no memory of the user
-just because this turn surfaced little. If nothing relevant was recalled, say you
+conversations. It reaches you in two parts: a <user_profile> block of who the
+user is (their role, location, languages, and core context), present on every
+turn, and a <recalled_memory> block of facts that looked relevant to the current
+turn. Treat both as true things you already know about this user. This memory is
+not exhaustive and recall is imperfect, so when the user asks what you know about
+them, answer from whatever the profile and recalled memories contain rather than
+denying that you know them, and never claim to have no memory of the user just
+because this turn surfaced little. If a detail genuinely isn't present, say you
 may not have it stored yet rather than asserting you know nothing about them.
 
 You have a web_search tool. Use it when a question depends on current events,
@@ -44,21 +46,58 @@ export function attachedDocumentsNote(filenames: string[]): string {
   return `The user has already attached the following document(s) to THIS conversation: ${list}. They are available to you right now through the retrieve_documents tool. When the user's question may relate to them, call retrieve_documents to read the relevant passages before answering, and cite the document name and location. Never claim that no document is attached, and never ask the user to upload a document that is already listed here.`;
 }
 
+interface NoteMemory {
+  content: string;
+  category: string;
+}
+
 /**
  * The delimited memory section prepended to the system prompt when
- * `load_context` retrieved memories for this turn (Phase 3). It is built fresh
- * each turn and never checkpointed, so it can't accumulate across the thread.
- * The instruction is deliberately soft: use what's relevant, ignore the rest,
- * and don't announce the mechanism — the "used N memories" chip is where recall
- * is surfaced to the user, not the prose.
+ * `load_context` assembled memories for this turn. Built fresh each turn and
+ * never checkpointed, so it can't accumulate across the thread.
+ *
+ * Phase 6 splits it into two blocks. `<user_profile>` is the always-on resident
+ * identity block (role, location, languages, core context): stable background
+ * that should quietly shape tone and framing on every turn, whether or not the
+ * user asked about themselves. `<recalled_memory>` is what this specific turn
+ * retrieved, task-relevant and use-if-relevant. The instruction stays soft: use
+ * what fits, ignore the rest, and don't announce the mechanism — the "used N
+ * memories" chip is where recall is surfaced to the user, not the prose.
  */
-export function memoriesNote(
-  memories: Array<{ content: string; category: string }>,
-): string {
-  const lines = memories.map((m) => `- (${m.category}) ${m.content}`).join("\n");
-  return `Here is what you remember about this user from past conversations. Use anything relevant to personalize your answer; ignore anything that isn't. Do not mention that you are drawing on stored memories unless the user asks.
+export function memoriesNote(params: {
+  profile: NoteMemory[];
+  retrieved: NoteMemory[];
+}): string {
+  const { profile, retrieved } = params;
+  const sections: string[] = [
+    "Here is what you know about this user from past conversations. Use anything relevant to personalize your answer; ignore anything that isn't. Do not mention that you are drawing on stored memories unless the user asks.",
+  ];
 
-<user_memory>
+  if (profile.length > 0) {
+    const lines = profile
+      .map((m) => `- (${m.category}) ${m.content}`)
+      .join("\n");
+    sections.push(
+      `This is who the user is — durable background that holds across every conversation. Let it shape your tone and framing even when the current message isn't about them.
+
+<user_profile>
 ${lines}
-</user_memory>`;
+</user_profile>`,
+    );
+  }
+
+  if (retrieved.length > 0) {
+    const lines = retrieved
+      .map((m) => `- (${m.category}) ${m.content}`)
+      .join("\n");
+    sections.push(
+      `These memories looked relevant to the current turn specifically.
+
+<recalled_memory>
+${lines}
+</recalled_memory>`,
+    );
+  }
+
+  return sections.join("\n\n");
 }

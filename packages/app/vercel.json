@@ -7,6 +7,10 @@
       "schedule": "0 4 * * *"
     },
     {
+      "path": "/api/cron/consolidate-memories",
+      "schedule": "0 5 * * *"
+    },
+    {
       "path": "/api/cron/reset-breaker",
       "schedule": "5 0 * * *"
     }

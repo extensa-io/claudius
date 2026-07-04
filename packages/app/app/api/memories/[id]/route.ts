@@ -1,7 +1,7 @@
 import { ObjectId } from "mongodb";
 import type { NextRequest } from "next/server";
 import { z } from "zod";
-import { AppError, deleteMemory, editMemory } from "@claudius/shared";
+import { AppError, deleteMemory, editMemory, setImportance } from "@claudius/shared";
 import { auth } from "@/lib/auth";
 import { errorResponse } from "@/lib/http";
 
@@ -11,12 +11,22 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-const PatchSchema = z.object({ content: z.string().trim().min(3).max(500) });
+// A PATCH sets content (re-embeds) or importance (Phase 6, re-ranks only), or
+// both. At least one must be present; keeping them independent means editing
+// wording never silently resets salience, and vice versa.
+const PatchSchema = z
+  .object({
+    content: z.string().trim().min(3).max(500).optional(),
+    importance: z.number().min(0).max(1).optional(),
+  })
+  .refine((v) => v.content !== undefined || v.importance !== undefined, {
+    message: "Provide content or importance.",
+  });
 
 /**
- * Edit a memory's content. `editMemory` re-embeds so the corrected wording stays
- * retrievable, and scopes the update to the owner — a memory that isn't theirs
- * (or is missing) is an indistinguishable 404.
+ * Edit a memory. `content` re-embeds so the corrected wording stays retrievable;
+ * `importance` only re-ranks (no embedding change). Both scope the update to the
+ * owner — a memory that isn't theirs (or is missing) is an indistinguishable 404.
  */
 export async function PATCH(
   req: NextRequest,
@@ -32,11 +42,17 @@ export async function PATCH(
 
     const parsed = PatchSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
-      throw new AppError("invalid_input", "Memory content is required.");
+      throw new AppError("invalid_input", "Nothing to update.");
     }
 
-    const ok = await editMemory(userId, id, parsed.data.content);
-    if (!ok) throw new AppError("not_found", "Memory not found.");
+    if (parsed.data.content !== undefined) {
+      const ok = await editMemory(userId, id, parsed.data.content);
+      if (!ok) throw new AppError("not_found", "Memory not found.");
+    }
+    if (parsed.data.importance !== undefined) {
+      const ok = await setImportance(userId, id, parsed.data.importance);
+      if (!ok) throw new AppError("not_found", "Memory not found.");
+    }
     return Response.json({ ok: true });
   } catch (err) {
     return errorResponse(err);

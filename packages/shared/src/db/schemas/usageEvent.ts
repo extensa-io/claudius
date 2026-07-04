@@ -13,7 +13,16 @@ import { zObjectId } from "./common";
 export const UsageEventMetaSchema = z.object({
   userId: zObjectId,
   modelId: z.string(),
-  purpose: z.enum(["chat", "research", "memory_extraction", "title_gen"]),
+  // `memory_reclassify` (Phase 6) is the one-time salience backfill's model
+  // spend, kept distinct from ongoing `memory_extraction` so the admin dashboard
+  // can tell a migration burst apart from steady-state extraction cost.
+  purpose: z.enum([
+    "chat",
+    "research",
+    "memory_extraction",
+    "memory_reclassify",
+    "title_gen",
+  ]),
 });
 
 export const UsageEventSchema = z.object({
