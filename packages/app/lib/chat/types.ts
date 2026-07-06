@@ -47,6 +47,19 @@ export interface SearchActivityDataPart {
 }
 
 /**
+ * Emitted by the pre-graph interceptor (Phase 8) when a bang or a navigational
+ * query resolves to a URL. The client opens it in a NEW tab (window.open), so the
+ * conversation stays in place — mirroring the `data-conversation` precedent.
+ * Written transient: it drives the open side-effect and the inline "sent you to
+ * …" note without becoming a durable message part (the durable record, when the
+ * conversation already exists, is written server-side into the checkpoint).
+ */
+export interface RedirectDataPart {
+  url: string;
+  label: string;
+}
+
+/**
  * Message-level metadata. A finished research report is a normal assistant
  * message (so it sits at its chronological place in the thread and never floats),
  * tagged with `research` so the UI can give it a "Research report" header and a
@@ -65,6 +78,7 @@ export type ClaudiusUIMessage = UIMessage<
     conversation: ConversationDataPart;
     memories: MemoriesDataPart;
     search: SearchActivityDataPart;
+    redirect: RedirectDataPart;
   }
 >;
 

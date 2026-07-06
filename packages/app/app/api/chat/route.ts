@@ -7,6 +7,7 @@ import {
   assertCanInvoke,
   getChatGraph,
   isAppError,
+  loadSearchSettings,
   writeUsageEvent,
 } from "@claudius/shared";
 import { auth } from "@/lib/auth";
@@ -16,6 +17,8 @@ import {
   getOwnedConversation,
   touchConversation,
 } from "@/lib/chat/conversations";
+import { appendRedirectToThread } from "@/lib/chat/redirect";
+import { resolveRedirect } from "@/lib/chat/routing";
 import {
   associatePendingDocuments,
   getRetrievableDocuments,
@@ -70,13 +73,51 @@ export const POST = auth(async (req) => {
       throw new AppError("not_found", "Conversation not found.");
     }
 
-    // 2a. Burst rate limit: an abuse backstop distinct from the tier daily cap.
+    // 2. Burst rate limit: an abuse backstop distinct from the tier daily cap.
+    //    Applied BEFORE the pre-graph router too, so bang/redirect spam can't
+    //    bypass the volume backstop (it costs a DB read and maybe a checkpoint
+    //    write even though it never wakes the model).
     await enforceRateLimit(userId, "chat");
 
-    // 2b. Enforce tiers: model permission, cost controls, atomic daily cap.
+    // 3. Pre-graph router (Phase 8): the ZERO-COST path. A bang or a bare
+    //     URL/domain resolves to a redirect target WITHOUT waking the model, so
+    //     no tier is consumed and NO usage_events row is written (the model
+    //     never ran — invariant #3 holds because there is no model call to gate).
+    //     Resolved before TIER enforcement so a redirect never burns a daily
+    //     message. When the query already belongs to a conversation we persist a
+    //     small inline record into its checkpoint so history is honest; a bang as
+    //     the first message of a fresh chat does NOT create a conversation
+    //     (mirrors how a tripped cap leaves no empty row) — the client shows an
+    //     ephemeral note and opens the tab.
+    const searchSettings = await loadSearchSettings();
+    const redirect = resolveRedirect(text, searchSettings);
+    if (redirect) {
+      if (conversation) {
+        await appendRedirectToThread(
+          conversation._id!.toString(),
+          text,
+          redirect.url,
+          redirect.label,
+        );
+      }
+      const redirectStream = createUIMessageStream<ClaudiusUIMessage>({
+        execute: ({ writer }) => {
+          writer.write({ type: "start" });
+          writer.write({
+            type: "data-redirect",
+            data: { url: redirect.url, label: redirect.label },
+            transient: true,
+          });
+          writer.write({ type: "finish" });
+        },
+      });
+      return createUIMessageStreamResponse({ stream: redirectStream });
+    }
+
+    // 4. Enforce tiers: model permission, cost controls, atomic daily cap.
     const grant = await assertCanInvoke(userId, modelId);
 
-    // 3. Now safe to create a new conversation for a first message.
+    // 5. Now safe to create a new conversation for a first message.
     const isNewConversation = conversation === null;
     if (!conversation) {
       conversation = await createConversation({ userId, role, modelId });

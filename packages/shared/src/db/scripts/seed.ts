@@ -10,6 +10,11 @@ import {
   type TiersSettings,
 } from "../schemas";
 import { utcMonthMarker } from "../../tiers/catalog";
+import {
+  DEFAULT_BANGS,
+  DEFAULT_CACHE_TTLS,
+  DEFAULT_ESCALATION_KEYWORDS,
+} from "../../answer/defaults";
 
 /**
  * Entry point for `npm run db:seed`. Writes the default settings singletons.
@@ -122,6 +127,12 @@ const search: SearchSettings = {
   braveMonthlyThreshold: 1800,
   braveUsage: { month: utcMonthMarker(), count: 0 },
   highValueMinResults: 3,
+  // Phase 8 routing + caching defaults (see answer/defaults.ts). Seeded so a
+  // fresh database has the full config; the Phase 8 migration backfills these
+  // into a live Phase 7 document without touching the counter.
+  customBangs: DEFAULT_BANGS,
+  escalationKeywords: DEFAULT_ESCALATION_KEYWORDS,
+  cacheTtls: DEFAULT_CACHE_TTLS,
 };
 
 async function main(): Promise<void> {

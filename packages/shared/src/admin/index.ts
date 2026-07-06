@@ -17,4 +17,6 @@ export {
   type TiersInput,
   updateModelCatalog,
   updateTiers,
+  type SearchSettingsInput,
+  updateSearchSettings,
 } from "./settings";

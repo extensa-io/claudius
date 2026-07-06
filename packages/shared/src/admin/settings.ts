@@ -1,12 +1,17 @@
 import { settingsCol } from "../db/collections";
 import {
   AllowlistSettingsSchema,
+  type Bang,
+  BangSchema,
+  type CacheTtls,
+  CacheTtlsSchema,
   type ModelCatalogEntry,
   ModelCatalogSettingsSchema,
   type Tier,
   TiersSettingsSchema,
 } from "../db/schemas";
 import { AppError } from "../errors";
+import { z } from "zod";
 
 /**
  * Admin editors over the `settings` singletons. Each writer validates the
@@ -108,5 +113,45 @@ export async function updateTiers(tiers: TiersInput): Promise<void> {
     { _id: "tiers" },
     { $set: { admin, member, guest } },
     { upsert: true },
+  );
+}
+
+/**
+ * The admin-editable fields of the `search` singleton (Phase 8). Deliberately
+ * EXCLUDES `braveUsage` — that counter is owned by the engine (`recordBraveCall`)
+ * and must never be reset by a settings save, or a month's spend guard would be
+ * silently wiped. Each field is validated against its schema so the panel can't
+ * persist a malformed bang or a negative TTL that would later throw on read.
+ */
+export interface SearchSettingsInput {
+  braveMonthlyThreshold: number;
+  highValueMinResults: number;
+  customBangs: Bang[];
+  escalationKeywords: string[];
+  cacheTtls: CacheTtls;
+}
+
+const SearchSettingsInputSchema = z.object({
+  braveMonthlyThreshold: z.number().int().nonnegative(),
+  highValueMinResults: z.number().int().nonnegative(),
+  customBangs: z.array(BangSchema),
+  escalationKeywords: z.array(z.string().min(1)),
+  cacheTtls: CacheTtlsSchema,
+});
+
+export async function updateSearchSettings(
+  input: SearchSettingsInput,
+): Promise<void> {
+  const parsed = SearchSettingsInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new AppError("invalid_input", "Invalid search settings.");
+  }
+  const settings = await settingsCol();
+  // $set only the editable fields; braveUsage and _id are untouched so a live
+  // month's counter survives every admin save.
+  await settings.updateOne(
+    { _id: "search" },
+    { $set: parsed.data },
+    { upsert: false },
   );
 }

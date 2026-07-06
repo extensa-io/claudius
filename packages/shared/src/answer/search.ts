@@ -1,3 +1,4 @@
+import type { CacheTtls } from "../db/schemas";
 import { AppError } from "../errors";
 import {
   braveCountThisMonth,
@@ -5,35 +6,48 @@ import {
   recordBraveCall,
 } from "../tiers/catalog";
 import { braveSearch, BraveSearchError } from "./brave";
+import type { CacheStore } from "./cache";
+import { cacheKey, ttlForIntent } from "./cache";
+import { isFresh } from "./classify";
 import { tavilySearch } from "./tavily";
 import type {
   AnswerSearchRequest,
   AnswerSearchResult,
+  Intent,
   SearchResult,
   SelectionReason,
 } from "./types";
 
 /**
- * Source selection — the heart of the cost-tiered answer engine (Phase 7).
+ * Source selection — the heart of the cost-tiered answer engine (Phase 7),
+ * extended in Phase 8 with a read-through cache and intent-aware TTLs.
  *
- * The rule this phase is deliberately simple and documented, with the interface
- * shaped so Phase 8's intent router can drive the high-value gate later:
+ * The cost model is unchanged and deliberate: ONE paid backend is consulted per
+ * query. Brave is the default under its free monthly allowance; Tavily is the
+ * fallback (quota/error/quality) and the high-value slot. We do NOT fan both
+ * paid backends out concurrently on a query — that would double the cost the
+ * tiering exists to avoid. Robustness instead comes from a per-source TIMEOUT so
+ * a slow backend drops out and the fallback still returns results (the
+ * "partial results within budget" acceptance criterion): Brave carries its own
+ * abort timeout, and the Tavily fallback is wrapped in one here.
  *
- *   1. High-value gate: if the caller marks the request `highValue`, go straight
- *      to Tavily (advanced depth) — clean extraction and reranking are worth the
- *      cost for these.
- *   2. Otherwise Brave is the default WHILE under the free monthly threshold.
- *   3. Fall back to Tavily when:
- *        - the Brave monthly allowance is exhausted (quota),
- *        - Brave errors or times out (reliability),
- *        - Brave returns too few usable results (quality gate).
- *   4. If BOTH backends are unavailable, surface one user-safe AppError — never
- *      a hang, never a leaked internal.
+ * Phase 8 additions, all inert for a Phase 7 caller (one that passes only
+ * `query`, no `intent`, and no cache store):
+ *   - a cache read-through: an identical query served from `search_cache` skips
+ *     the backend round trip entirely (`cache_hit`). Only engaged when the caller
+ *     injects a store, so the Phase 7 unit tests keep exercising raw selection.
+ *   - intent-aware cache TTLs: navigational is never cached; informational picks
+ *     fresh vs. evergreen; transactional gets the short churn TTL.
  *
- * The chosen `source` and `reason` are returned for server-side logging so the
- * acceptance criterion ("Tavily fires only as a fallback, verifiable in
- * logging") is checkable; the tool discards them and returns only `results`.
+ * The chosen `source`/`reason` are returned for server-side logging so the
+ * routing is auditable; the tool discards them and returns only `results`.
  */
+
+// The Tavily fallback has no internal timeout of its own, so bound it here. Brave
+// already aborts at 6s; a matched ceiling keeps a slow fallback from eating the
+// chat turn's budget. On timeout the source "drops out" and we surface the same
+// user-safe unavailable error the both-down path uses.
+const TAVILY_TIMEOUT_MS = 8000;
 
 function ok(
   results: SearchResult[],
@@ -43,7 +57,29 @@ function ok(
   return { results, source, reason };
 }
 
-/** Tavily fallback that turns a Tavily failure into a user-safe AppError. */
+/** Run a source promise against a per-source timeout; a timeout rejects so the
+ * caller treats it exactly like any other source failure (drops out). */
+async function withTimeout<T>(
+  work: Promise<T>,
+  ms: number,
+  label: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
+/** Tavily fallback that turns any Tavily failure (including a timeout) into a
+ * user-safe AppError — both backends are effectively down for this query. */
 async function tavilyOrFail(
   query: string,
   maxResults: number | undefined,
@@ -51,11 +87,15 @@ async function tavilyOrFail(
   reason: SelectionReason,
 ): Promise<AnswerSearchResult> {
   try {
-    const results = await tavilySearch(query, maxResults, depth);
+    const results = await withTimeout(
+      tavilySearch(query, maxResults, depth),
+      TAVILY_TIMEOUT_MS,
+      "tavily",
+    );
     return ok(results, "tavily", reason);
   } catch {
-    // Both backends are down (or the only-Tavily path failed). Do not leak the
-    // underlying error; the tool maps this to a graceful "search unavailable".
+    // Do not leak the underlying error; the tool maps this to a graceful
+    // "search unavailable" so the chat turn still completes.
     throw new AppError(
       "internal",
       "Web search is temporarily unavailable. Please try again.",
@@ -63,7 +103,11 @@ async function tavilyOrFail(
   }
 }
 
-export async function answerSearch(
+/**
+ * The raw source-selection path (Phase 7 behavior). Kept separate from the cache
+ * wrapper so its cost-tiered logic stays the single, testable unit it was.
+ */
+async function selectAndSearch(
   request: AnswerSearchRequest,
 ): Promise<AnswerSearchResult> {
   const { query, maxResults, highValue = false } = request;
@@ -81,28 +125,79 @@ export async function answerSearch(
     return tavilyOrFail(query, maxResults, "basic", "brave_quota_exhausted");
   }
 
-  // (2) Brave is the default. Count the call against the free-tier allowance
-  // BEFORE issuing it: the counter is a spend guard, so an attempt should
-  // consume quota even if it then errors (a failing call still hit Brave's
-  // metered endpoint). A cache hit in Phase 8 will skip this path entirely.
+  // (2) Brave is the default. Count the call BEFORE issuing it: the counter is a
+  // spend guard, so an attempt consumes quota even if it then errors.
   try {
     await recordBraveCall();
     const results = await braveSearch(query, maxResults);
 
-    // (3c) Quality gate: too few usable results → retry on Tavily. Brave's
-    // quota was already spent on the attempt; that's acceptable for a soft
-    // guard, and Phase 8's cache softens the double-hit further.
+    // (3c) Quality gate: too few usable results → retry on Tavily.
     if (results.length < settings.highValueMinResults) {
       return tavilyOrFail(query, maxResults, "basic", "brave_low_quality");
     }
     return ok(results, "brave", "brave_primary");
   } catch (error: unknown) {
-    // (3b) Brave errored or timed out → Tavily fallback.
+    // (3b) Brave errored or timed out → Tavily fallback (partial results from
+    // the source that responded — the timeout acceptance criterion).
     if (error instanceof BraveSearchError) {
       return tavilyOrFail(query, maxResults, "basic", "brave_error");
     }
-    // recordBraveCall failing means settings are misconfigured — that is a real
-    // internal fault, not a backend hiccup, so surface it rather than mask it.
+    // recordBraveCall failing means settings are misconfigured — a real internal
+    // fault, not a backend hiccup, so surface it rather than mask it.
     throw error;
   }
+}
+
+/**
+ * The public entry point. `opts.cache` engages the Phase 8 read-through cache;
+ * without it this is exactly the Phase 7 selection path (so the Phase 7 tests,
+ * which inject no store, still test raw selection).
+ *
+ * The cache is GLOBAL and CONTENT-ONLY — the key hashes only the normalized
+ * query + intent + source params, never a userId — so a hit is safely shared
+ * across users (invariant #1 holds by construction; see cache.ts).
+ */
+export async function answerSearch(
+  request: AnswerSearchRequest,
+  opts: { cache?: CacheStore; cacheTtls?: CacheTtls } = {},
+): Promise<AnswerSearchResult> {
+  const intent: Intent = request.intent ?? "informational";
+  const { cache } = opts;
+
+  // Navigational queries never reach the engine in production (the pre-graph
+  // interceptor resolves them to a URL). If one arrives anyway, we still serve
+  // it as a normal search but never cache it.
+  const cacheable = cache != null && intent !== "navigational";
+  const key = cacheable
+    ? cacheKey({
+        query: request.query,
+        intent,
+        highValue: request.highValue ?? false,
+        maxResults: request.maxResults,
+      })
+    : null;
+
+  // (0) Cache read-through: an identical prior query skips both backends.
+  if (cacheable && key) {
+    const hit = await cache!.get(key);
+    if (hit) {
+      return ok(hit.results, hit.source, "cache_hit");
+    }
+  }
+
+  const result = await selectAndSearch(request);
+
+  // Populate the cache on a real backend result. TTL is intent-aware: a
+  // news-like informational query reaps in minutes, an evergreen one survives
+  // for weeks. A zero TTL (navigational) is a no-op in the store.
+  if (cacheable && key && result.results.length > 0) {
+    const ttl = ttlForIntent(intent, isFresh(request.query), opts.cacheTtls);
+    await cache!.set(
+      key,
+      { results: result.results, source: result.source, intent },
+      ttl,
+    );
+  }
+
+  return result;
 }

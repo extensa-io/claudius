@@ -22,6 +22,18 @@ export type SearchResult = z.infer<typeof SearchResultSchema>;
 export type SearchSource = "brave" | "tavily";
 
 /**
+ * A query's intent, resolved by the heuristic classifier (Phase 8) before the
+ * model wakes up. This drives both routing (navigational redirects with zero
+ * tokens; informational/transactional flow to the engine) and cache TTL choice.
+ *   - `navigational`: the user wants to GO somewhere (a bang, a URL, a bare
+ *     domain, a "site login" pattern). Resolves to a URL, never synthesized.
+ *   - `informational`: the user wants an ANSWER. The default and common case.
+ *   - `transactional`: the user wants to DO something (download, buy, convert).
+ *     Returned as results with lighter synthesis and a short cache life.
+ */
+export type Intent = "navigational" | "informational" | "transactional";
+
+/**
  * A search request into the engine. `query` is the only required field. The
  * optional signals shape source selection without changing the tool's own
  * schema:
@@ -35,6 +47,13 @@ export interface AnswerSearchRequest {
   query: string;
   maxResults?: number;
   highValue?: boolean;
+  /**
+   * The classified intent (Phase 8). When present it drives cache TTL selection
+   * and, together with a depth signal, the Brave→Tavily escalation. Absent reads
+   * as `informational` so a Phase 7 caller (the tool passing only `query`) keeps
+   * its exact behavior.
+   */
+  intent?: Intent;
 }
 
 /**
@@ -56,4 +75,8 @@ export type SelectionReason =
   | "brave_quota_exhausted"
   | "brave_error"
   | "high_value_gate"
-  | "brave_low_quality";
+  | "brave_low_quality"
+  // Phase 8: the informational depth signal escalated Brave → Tavily advanced.
+  | "intent_escalation"
+  // Phase 8: served from the tiered cache — no backend round trip at all.
+  | "cache_hit";

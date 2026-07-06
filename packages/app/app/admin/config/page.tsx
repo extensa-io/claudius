@@ -1,13 +1,21 @@
 import {
+  DEFAULT_BANGS,
+  DEFAULT_CACHE_TTLS,
+  DEFAULT_ESCALATION_KEYWORDS,
   getAdminAllowlist,
   getAllowlist,
   guestBreakerView,
   loadModelCatalog,
+  loadSearchSettings,
   loadTier,
 } from "@claudius/shared";
 import { AllowlistEditor } from "@/components/admin/allowlist-editor";
 import { BreakerPanel } from "@/components/admin/breaker-panel";
 import { ModelCatalogEditor } from "@/components/admin/model-catalog-editor";
+import {
+  SearchSettingsEditor,
+  type SearchSettingsView,
+} from "@/components/admin/search-settings-editor";
 import { TierEditor } from "@/components/admin/tier-editor";
 
 export const runtime = "nodejs";
@@ -18,7 +26,7 @@ export const runtime = "nodejs";
  * interactive client panels that persist through the /api/admin/* routes.
  */
 export default async function AdminConfigPage(): Promise<React.ReactNode> {
-  const [memberEmails, adminEmails, models, admin, member, guest, breaker] =
+  const [memberEmails, adminEmails, models, admin, member, guest, breaker, search] =
     await Promise.all([
       getAllowlist(),
       getAdminAllowlist(),
@@ -27,7 +35,19 @@ export default async function AdminConfigPage(): Promise<React.ReactNode> {
       loadTier("member"),
       loadTier("guest"),
       guestBreakerView(),
+      loadSearchSettings(),
     ]);
+
+  // Phase 8 fields are optional on the stored document (older Phase 7 docs), so
+  // fill built-in defaults for the panel's initial state.
+  const searchView: SearchSettingsView = {
+    braveMonthlyThreshold: search.braveMonthlyThreshold,
+    highValueMinResults: search.highValueMinResults,
+    customBangs: search.customBangs ?? DEFAULT_BANGS,
+    escalationKeywords: search.escalationKeywords ?? DEFAULT_ESCALATION_KEYWORDS,
+    cacheTtls: search.cacheTtls ?? DEFAULT_CACHE_TTLS,
+    braveUsage: search.braveUsage,
+  };
 
   return (
     <div className="space-y-6">
@@ -45,6 +65,7 @@ export default async function AdminConfigPage(): Promise<React.ReactNode> {
       />
       <ModelCatalogEditor initial={models} />
       <TierEditor initial={{ admin, member, guest }} />
+      <SearchSettingsEditor initial={searchView} />
     </div>
   );
 }

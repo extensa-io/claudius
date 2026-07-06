@@ -41,6 +41,7 @@ vi.mock("../tiers/catalog", () => ({
 }));
 
 const { answerSearch } = await import("./search");
+const { MemoryCacheStore } = await import("./cache");
 
 function settings(overrides: Partial<SearchSettings> = {}): SearchSettings {
   return {
@@ -150,5 +151,65 @@ describe("answerSearch source selection", () => {
     // so it propagates rather than silently degrading to Tavily.
     await expect(answerSearch({ query: "x" })).rejects.toThrow(/settings missing/);
     expect(tavilySearch).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Phase 8 cache integration — the read-through cache in front of source
+ * selection. A MemoryCacheStore is injected so no database is touched, proving
+ * the second identical query is served from cache with NO backend round trip.
+ */
+describe("answerSearch caching (Phase 8)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loadSearchSettings.mockResolvedValue(settings());
+    recordBraveCall.mockResolvedValue(1);
+    braveSearch.mockResolvedValue(hits(5));
+    tavilySearch.mockResolvedValue(hits(5));
+  });
+
+  it("serves an identical informational query from cache on the second call", async () => {
+    const cache = new MemoryCacheStore(() => 0);
+    const req = { query: "what is a covering index", intent: "informational" as const };
+
+    const first = await answerSearch(req, { cache });
+    expect(first.reason).toBe("brave_primary");
+    expect(braveSearch).toHaveBeenCalledOnce();
+
+    const second = await answerSearch(req, { cache });
+    expect(second.reason).toBe("cache_hit");
+    expect(second.results).toEqual(first.results);
+    // No second backend round trip — Brave (and its quota) untouched.
+    expect(braveSearch).toHaveBeenCalledOnce();
+    expect(recordBraveCall).toHaveBeenCalledOnce();
+  });
+
+  it("never caches a navigational query", async () => {
+    const cache = new MemoryCacheStore(() => 0);
+    const req = { query: "example.com", intent: "navigational" as const };
+    await answerSearch(req, { cache });
+    await answerSearch(req, { cache });
+    // Both calls hit the backend; navigational is never stored (TTL 0).
+    expect(braveSearch).toHaveBeenCalledTimes(2);
+  });
+
+  it("keys fresh (news) and evergreen variants of a query separately by TTL", async () => {
+    // A fresh query gets the short TTL; after it lapses the entry is gone and a
+    // repeat re-hits the backend, while an evergreen entry would still be warm.
+    let now = 0;
+    const cache = new MemoryCacheStore(() => now);
+    const fresh = { query: "bitcoin price today", intent: "informational" as const };
+    await answerSearch(fresh, { cache, cacheTtls: { freshSeconds: 60, evergreenSeconds: 6000, transactionalSeconds: 30 } });
+    expect(braveSearch).toHaveBeenCalledTimes(1);
+    now += 61_000; // past the 60s fresh TTL
+    await answerSearch(fresh, { cache, cacheTtls: { freshSeconds: 60, evergreenSeconds: 6000, transactionalSeconds: 30 } });
+    expect(braveSearch).toHaveBeenCalledTimes(2); // reaped → backend again
+  });
+
+  it("is inert when no cache store is injected (Phase 7 behavior)", async () => {
+    await answerSearch({ query: "x", intent: "informational" });
+    await answerSearch({ query: "x", intent: "informational" });
+    // Without a store every call goes to the backend, exactly as in Phase 7.
+    expect(braveSearch).toHaveBeenCalledTimes(2);
   });
 });

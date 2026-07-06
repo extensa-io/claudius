@@ -116,6 +116,18 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
   created.push("jobs.expiresAt_ttl");
 
+  // --- search_cache: the tiered answer-engine cache (Phase 8) -----------
+  // The cache key IS the document _id (a hash of normalized query + intent +
+  // source params), so a lookup is a primary-key hit and needs no extra index.
+  // A TTL on expiresAt reaps each entry on its own intent-aware lifetime
+  // (news-like minutes vs. evergreen weeks); expireAfterSeconds:0 means "expire
+  // at the date stored in the field". The collection holds no user data, so no
+  // userId index and no invariant-#1 concern (see SearchCacheEntrySchema).
+  await db
+    .collection(COLLECTIONS.searchCache)
+    .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
+  created.push("search_cache.expiresAt_ttl");
+
   // --- vector search indexes --------------------------------------------
   // Created programmatically against Atlas. Every search filters by userId as a
   // pre-filter (invariant: a vector search never returns another user's data),

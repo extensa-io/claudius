@@ -7,6 +7,7 @@ import type {
   Job,
   Memory,
   RateLimit,
+  SearchCacheEntry,
   Settings,
   UsageEvent,
   User,
@@ -28,6 +29,10 @@ export const COLLECTIONS = {
   settings: "settings",
   rateLimits: "rate_limits",
   jobs: "jobs",
+  // Phase 8: the tiered answer-engine cache. GLOBAL and content-only — no
+  // userId, no user data — so it is safely shared across users (see
+  // SearchCacheEntrySchema). Entries reap on a per-doc TTL.
+  searchCache: "search_cache",
 } as const;
 
 export async function usersCol(): Promise<Collection<User>> {
@@ -64,4 +69,8 @@ export async function rateLimitsCol(): Promise<Collection<RateLimit>> {
 
 export async function jobsCol(): Promise<Collection<Job>> {
   return (await getDb()).collection<Job>(COLLECTIONS.jobs);
+}
+
+export async function searchCacheCol(): Promise<Collection<SearchCacheEntry>> {
+  return (await getDb()).collection<SearchCacheEntry>(COLLECTIONS.searchCache);
 }

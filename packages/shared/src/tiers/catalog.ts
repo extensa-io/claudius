@@ -102,12 +102,26 @@ export async function loadSearchSettings(): Promise<SearchSettings> {
   if (!doc || !("braveMonthlyThreshold" in doc)) {
     throw new AppError("internal", "Search settings are not configured.");
   }
-  const { braveMonthlyThreshold, braveUsage, highValueMinResults } = doc;
+  const {
+    braveMonthlyThreshold,
+    braveUsage,
+    highValueMinResults,
+    customBangs,
+    escalationKeywords,
+    cacheTtls,
+  } = doc;
   return {
     _id: "search",
     braveMonthlyThreshold,
     braveUsage,
     highValueMinResults,
+    // Phase 8 fields are optional so a pre-migration Phase 7 document still reads
+    // back valid; the engine and admin panel apply built-in defaults when absent
+    // (see answer/defaults.ts), so these are surfaced as-stored (possibly undefined)
+    // rather than defaulted here — keeping this loader a pure read.
+    ...(customBangs !== undefined ? { customBangs } : {}),
+    ...(escalationKeywords !== undefined ? { escalationKeywords } : {}),
+    ...(cacheTtls !== undefined ? { cacheTtls } : {}),
   };
 }
 

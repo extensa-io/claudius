@@ -114,7 +114,37 @@ export type ResearchBudgetSettings = z.infer<
 >;
 
 /**
- * _id: "search" — the answer engine's source-selection config (Phase 7).
+ * A single personal bang: a `!token` shortcut that redirects a query to a site's
+ * own search (Phase 8). `urlTemplate` carries a `{query}` placeholder that the
+ * bang parser fills with the URL-encoded remainder of the input; a bang typed
+ * with no query resolves to the template with an empty substitution (the site
+ * home for most templates). Tokens are stored without the leading `!`.
+ */
+export const BangSchema = z.object({
+  token: z.string().min(1),
+  urlTemplate: z.string().url().or(z.string().startsWith("http")),
+});
+export type Bang = z.infer<typeof BangSchema>;
+
+/**
+ * Per-intent cache TTLs in seconds (Phase 8). The tiered cache keys entries by
+ * intent and a freshness signal, so a news-like query reaps in minutes while an
+ * evergreen fact survives for weeks:
+ *   - `freshSeconds`: news-like / time-sensitive informational queries.
+ *   - `evergreenSeconds`: stable informational queries (the common case).
+ *   - `transactionalSeconds`: transactional queries (short — results churn).
+ * Navigational queries are not cached (they resolve to a URL with no round trip).
+ */
+export const CacheTtlsSchema = z.object({
+  freshSeconds: z.number().int().nonnegative(),
+  evergreenSeconds: z.number().int().nonnegative(),
+  transactionalSeconds: z.number().int().nonnegative(),
+});
+export type CacheTtls = z.infer<typeof CacheTtlsSchema>;
+
+/**
+ * _id: "search" — the answer engine's config (Phase 7 source selection, Phase 8
+ * routing + caching).
  *
  * Brave is the primary web-search backend under its free monthly allowance;
  * Tavily is the fallback + high-value slot. These are non-Bedrock calls, so
@@ -127,8 +157,14 @@ export type ResearchBudgetSettings = z.infer<
  *   - `highValueMinResults`: the quality-fallback gate. If Brave returns fewer
  *     than this many usable results, the engine retries the query on Tavily.
  *
- * The admin CRUD surface for this document is Phase 8; Phase 7 only reads it and
- * increments the counter.
+ * Phase 8 adds admin-tunable routing/caching config so a threshold, a bang, or a
+ * TTL takes effect without a redeploy:
+ *   - `customBangs`: personal bangs merged over the built-in default table.
+ *   - `escalationKeywords`: depth signals that escalate an informational query
+ *     from Brave to Tavily advanced (e.g. "in depth", "compare", "comprehensive").
+ *   - `cacheTtls`: the per-intent cache lifetimes above.
+ * All three are optional so a Phase 7 document reads back valid before the Phase 8
+ * migration fills them; loaders apply defaults for a missing field.
  */
 export const SearchSettingsSchema = z.object({
   _id: z.literal("search"),
@@ -138,6 +174,9 @@ export const SearchSettingsSchema = z.object({
     count: z.number().int().nonnegative(),
   }),
   highValueMinResults: z.number().int().nonnegative(),
+  customBangs: z.array(BangSchema).optional(),
+  escalationKeywords: z.array(z.string().min(1)).optional(),
+  cacheTtls: CacheTtlsSchema.optional(),
 });
 export type SearchSettings = z.infer<typeof SearchSettingsSchema>;
 

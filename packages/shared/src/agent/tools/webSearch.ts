@@ -2,7 +2,12 @@ import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { answerSearch } from "../../answer";
+import {
+  answerSearch,
+  classifyIntent,
+  getDefaultCacheStore,
+} from "../../answer";
+import { loadSearchSettings } from "../../tiers/catalog";
 import { AppError } from "../../errors";
 
 /**
@@ -52,10 +57,27 @@ export interface WebSearchResult {
 export const webSearchTool = tool(
   async ({ query }, config: RunnableConfig): Promise<string> => {
     try {
-      const { results, source, reason } = await answerSearch({
-        query,
-        maxResults: MAX_RESULTS,
-      });
+      // Classify the query so the engine can pick the backend depth (Tavily
+      // escalation on a depth signal) and the cache TTL by intent. The heavy
+      // navigational/bang routing happens in the pre-graph interceptor; by the
+      // time the model has CHOSEN to call this tool the query is informational
+      // or transactional, so here classification only tunes depth + caching.
+      const settings = await loadSearchSettings();
+      const { intent, highValue } = classifyIntent(query, { settings });
+      const { results, source, reason } = await answerSearch(
+        {
+          query,
+          maxResults: MAX_RESULTS,
+          intent,
+          highValue,
+        },
+        {
+          cache: getDefaultCacheStore(),
+          // exactOptionalPropertyTypes: only pass cacheTtls when set, so the
+          // engine falls back to its built-in defaults rather than `undefined`.
+          ...(settings.cacheTtls ? { cacheTtls: settings.cacheTtls } : {}),
+        },
+      );
       // Log the backend decision (never the query text) so cost routing is
       // auditable. This is the "verifiable in logging" acceptance hook.
       console.log(`[web_search] served by ${source} (${reason})`);

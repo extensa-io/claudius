@@ -95,6 +95,27 @@ export function ChatPane({
       onData: (part) => {
         if (part.type === "data-conversation") {
           onConversationCreated(part.data.id, part.data.title);
+        } else if (part.type === "data-redirect") {
+          // Phase 8 zero-cost path: a bang or navigational query resolved to a
+          // URL server-side. Open it in a NEW tab so the conversation stays put
+          // (mirrors data-conversation's in-place handling), and leave an
+          // ephemeral note in this session so the user sees where they were sent.
+          if (typeof window !== "undefined") {
+            window.open(part.data.url, "_blank", "noopener,noreferrer");
+          }
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `redirect-${prev.length}-${part.data.url}`,
+              role: "assistant",
+              parts: [
+                {
+                  type: "text",
+                  text: `↗ Opened ${part.data.url} (${part.data.label}).`,
+                },
+              ],
+            },
+          ]);
         }
       },
       onFinish: () => {
