@@ -17,6 +17,7 @@ export default defineConfig({
       AWS_REGION: "us-east-1",
       TAVILY_API_KEY: "tvly-test",
       VOYAGE_API_KEY: "pa-test",
+      BRAVE_API_KEY: "brave-test",
     },
   },
 });

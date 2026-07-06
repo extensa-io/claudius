@@ -29,6 +29,12 @@ const EnvSchema = z.object({
   // the worker's memory extraction also needs. Both runtimes require them.
   TAVILY_API_KEY: z.string().min(1),
   VOYAGE_API_KEY: z.string().min(1),
+  // Phase 7: Brave Search is the primary web-search backend for the answer
+  // engine (Tavily is demoted to fallback + high-value slot). The engine lives
+  // in shared and is runtime-agnostic, so the key is required in the base schema
+  // like TAVILY_API_KEY — both runtimes validate it even though only the app's
+  // web_search tool exercises the engine this phase.
+  BRAVE_API_KEY: z.string().min(1),
 
   // --- App-only (optional here; asserted by assertAppEnv at the app boundary) --
   AUTH_SECRET: z.string().min(1).optional(),

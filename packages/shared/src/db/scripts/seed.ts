@@ -6,8 +6,10 @@ import {
   type GuestCircuitBreakerSettings,
   type ModelCatalogSettings,
   type ResearchBudgetSettings,
+  type SearchSettings,
   type TiersSettings,
 } from "../schemas";
+import { utcMonthMarker } from "../../tiers/catalog";
 
 /**
  * Entry point for `npm run db:seed`. Writes the default settings singletons.
@@ -110,6 +112,18 @@ const researchBudget: ResearchBudgetSettings = {
   wallClockMs: 20 * 60 * 1000, // 20 minutes, far past Vercel's 60s function cap.
 };
 
+// Answer-engine search config (Phase 7). Brave is primary under its free
+// monthly allowance; Tavily is the fallback + high-value slot. The threshold is
+// conservative (well under Brave's free 2,000/month) so the switch to Tavily is
+// exercised long before the real quota bites. The usage counter starts at zero
+// for the current UTC month and rolls over automatically thereafter.
+const search: SearchSettings = {
+  _id: "search",
+  braveMonthlyThreshold: 1800,
+  braveUsage: { month: utcMonthMarker(), count: 0 },
+  highValueMinResults: 3,
+};
+
 async function main(): Promise<void> {
   const col = await settingsCol();
   const docs = [
@@ -119,6 +133,7 @@ async function main(): Promise<void> {
     tiers,
     guestCircuitBreaker,
     researchBudget,
+    search,
   ];
 
   for (const doc of docs) {

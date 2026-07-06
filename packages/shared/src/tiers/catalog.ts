@@ -5,6 +5,7 @@ import type {
   ModelCatalogEntry,
   ResearchBudgetSettings,
   Role,
+  SearchSettings,
   Tier,
   User,
 } from "../db/schemas";
@@ -80,6 +81,94 @@ export async function loadResearchBudget(): Promise<ResearchBudgetSettings> {
     maxTokens,
     wallClockMs,
   };
+}
+
+/** The current UTC month as a "YYYY-MM" marker for the Brave free-tier counter. */
+export function utcMonthMarker(now: Date = new Date()): string {
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+/**
+ * The answer-engine search config (Phase 7). Missing doc fails loudly, matching
+ * the other singleton loaders. The `braveUsage` marker is returned as-stored;
+ * source selection normalizes a stale month to a zero count in-memory so a
+ * read never has to write, and `recordBraveCall` does the durable rollover.
+ */
+export async function loadSearchSettings(): Promise<SearchSettings> {
+  const settings = await settingsCol();
+  const doc = await settings.findOne({ _id: "search" });
+  if (!doc || !("braveMonthlyThreshold" in doc)) {
+    throw new AppError("internal", "Search settings are not configured.");
+  }
+  const { braveMonthlyThreshold, braveUsage, highValueMinResults } = doc;
+  return {
+    _id: "search",
+    braveMonthlyThreshold,
+    braveUsage,
+    highValueMinResults,
+  };
+}
+
+/**
+ * The count of Brave calls already made in the current UTC month, treating a
+ * stored marker from a past month as zero (the month has rolled; the durable
+ * reset happens lazily on the next `recordBraveCall`). This is what source
+ * selection compares against `braveMonthlyThreshold`.
+ */
+export function braveCountThisMonth(
+  usage: SearchSettings["braveUsage"],
+  now: Date = new Date(),
+): number {
+  return usage.month === utcMonthMarker(now) ? usage.count : 0;
+}
+
+/**
+ * Record one Brave call against the free-tier allowance. A single atomic
+ * update handles the month rollover: if the stored marker is not the current
+ * UTC month, we reset the marker and set the count to 1; otherwise we increment
+ * in place. Two competing updates in the same month both increment (the counter
+ * is a spend guard, not an exact-once ledger, so a benign over-count is fine and
+ * a lost increment is not possible). Returns the new in-month count.
+ */
+export async function recordBraveCall(now: Date = new Date()): Promise<number> {
+  const settings = await settingsCol();
+  const month = utcMonthMarker(now);
+
+  // Same-month path: bump the existing counter.
+  const bumped = await settings.findOneAndUpdate(
+    { _id: "search", "braveUsage.month": month },
+    { $inc: { "braveUsage.count": 1 } },
+    { returnDocument: "after" },
+  );
+  if (bumped && "braveUsage" in bumped) {
+    return bumped.braveUsage.count;
+  }
+
+  // Rollover path: the stored marker is a different (past) month, so reset it.
+  // Guarded on the month NOT already being current so a racing rollover can't
+  // clobber a fresh count back to 1.
+  const rolled = await settings.findOneAndUpdate(
+    { _id: "search", "braveUsage.month": { $ne: month } },
+    { $set: { "braveUsage.month": month, "braveUsage.count": 1 } },
+    { returnDocument: "after" },
+  );
+  if (rolled && "braveUsage" in rolled) {
+    return rolled.braveUsage.count;
+  }
+
+  // The rollover lost the race to a concurrent writer that already created the
+  // current month; fall through to a plain increment against it.
+  const after = await settings.findOneAndUpdate(
+    { _id: "search", "braveUsage.month": month },
+    { $inc: { "braveUsage.count": 1 } },
+    { returnDocument: "after" },
+  );
+  if (after && "braveUsage" in after) {
+    return after.braveUsage.count;
+  }
+  throw new AppError("internal", "Search settings are not configured.");
 }
 
 /**

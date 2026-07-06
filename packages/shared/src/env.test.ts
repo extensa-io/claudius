@@ -15,6 +15,7 @@ const VALID_ENV: Record<string, string> = {
   ADMIN_EMAIL: "admin@example.com",
   TAVILY_API_KEY: "tvly-test",
   VOYAGE_API_KEY: "pa-test",
+  BRAVE_API_KEY: "brave-test",
   BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_test",
   CRON_SECRET: "cron-secret-test",
 };

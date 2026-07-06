@@ -1,16 +1,21 @@
 import { tool } from "@langchain/core/tools";
-import { tavily } from "@tavily/core";
 import { z } from "zod";
-import { env } from "../../env";
+import { answerSearch } from "../../answer";
+import { AppError } from "../../errors";
 
 /**
- * The agent's single tool in Phase 1: a thin wrapper over Tavily's search API.
+ * The agent's web tool. As of Phase 7 its backend is the cost-tiered answer
+ * engine (`answerSearch`) rather than a direct Tavily call: Brave serves the
+ * query by default under its free monthly allowance, Tavily is the fallback and
+ * high-value slot. The tool's OUTPUT CONTRACT is unchanged on purpose — it still
+ * returns `JSON.stringify({ results })` with the exact `{ title, url, snippet }`
+ * shape it always has — so the event bridge, the tool-activity cards, and the
+ * `WebSearchToolOutput` view type are byte-compatible. Internals swapped; the
+ * contract held.
  *
- * We hand-roll the tool rather than pull a prebuilt one so the output shape is
- * exactly what the spec calls for — title, url, snippet — and nothing else. The
- * model sees a compact, predictable structure, and the chat UI can render the
- * same shape as a "sources" affordance. Tavily's `content` field is the
- * extracted snippet; we rename it to `snippet` at this boundary.
+ * The engine reports which backend served the query and why; we log that line
+ * (source only, never the query content) so "Tavily fires only as a fallback"
+ * is verifiable, then discard it. The model sees only the results.
  */
 
 const MAX_RESULTS = 5;
@@ -19,36 +24,44 @@ const webSearchSchema = z.object({
   query: z.string().describe("The search query to run against the web."),
 });
 
+// Retained as the tool's public result type so downstream view code that
+// imports it keeps compiling; it is the same shape as the engine's SearchResult.
 export interface WebSearchResult {
   title: string;
   url: string;
   snippet: string;
 }
 
-// Lazily constructed so importing the tool never forces a client (and an env
-// read) at module load; the client is built on first use and reused after.
-let client: ReturnType<typeof tavily> | null = null;
-function getClient(): ReturnType<typeof tavily> {
-  client ??= tavily({ apiKey: env.TAVILY_API_KEY });
-  return client;
-}
-
 export const webSearchTool = tool(
   async ({ query }): Promise<string> => {
-    const response = await getClient().search(query, {
-      maxResults: MAX_RESULTS,
-      searchDepth: "basic",
-    });
+    try {
+      const { results, source, reason } = await answerSearch({
+        query,
+        maxResults: MAX_RESULTS,
+      });
+      // Log the backend decision (never the query text) so cost routing is
+      // auditable. This is the "verifiable in logging" acceptance hook.
+      console.log(`[web_search] served by ${source} (${reason})`);
 
-    const results: WebSearchResult[] = response.results.map((r) => ({
-      title: r.title,
-      url: r.url,
-      snippet: r.content,
-    }));
-
-    // Tool messages are strings; return JSON the model can read back and that
-    // the UI can parse to render source links.
-    return JSON.stringify({ results });
+      const shaped: WebSearchResult[] = results.map((r) => ({
+        title: r.title,
+        url: r.url,
+        snippet: r.snippet,
+      }));
+      // Tool messages are strings; return JSON the model can read back and that
+      // the UI can parse to render source links.
+      return JSON.stringify({ results: shaped });
+    } catch (error: unknown) {
+      // Both backends unavailable. Return a clean, model-readable signal (empty
+      // results + a note) instead of throwing into the graph, so the turn still
+      // completes gracefully rather than failing the whole chat.
+      const message =
+        error instanceof AppError
+          ? error.message
+          : "Web search is temporarily unavailable.";
+      console.log("[web_search] unavailable: both backends failed");
+      return JSON.stringify({ results: [], error: message });
+    }
   },
   {
     name: "web_search",

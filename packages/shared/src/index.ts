@@ -28,6 +28,7 @@ export {
   type DocumentKind,
 } from "./documents/constants";
 export { parseAndEmbedDocument } from "./documents/parse";
+export * from "./answer";
 export * from "./agent";
 export * from "./tiers";
 export * from "./usage";

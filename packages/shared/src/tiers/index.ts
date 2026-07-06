@@ -4,13 +4,17 @@ export {
   type InvokeGrant,
 } from "./assertCanInvoke";
 export {
+  braveCountThisMonth,
   findModelEntry,
   getUsableModels,
   isModelPermitted,
   loadGuestCircuitBreaker,
   loadModelCatalog,
   loadResearchBudget,
+  loadSearchSettings,
   loadTier,
+  recordBraveCall,
+  utcMonthMarker,
 } from "./catalog";
 export { consumeDailyMessage, startOfNextUtcDay } from "./dailyCap";
 export {

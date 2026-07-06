@@ -113,6 +113,34 @@ export type ResearchBudgetSettings = z.infer<
   typeof ResearchBudgetSettingsSchema
 >;
 
+/**
+ * _id: "search" — the answer engine's source-selection config (Phase 7).
+ *
+ * Brave is the primary web-search backend under its free monthly allowance;
+ * Tavily is the fallback + high-value slot. These are non-Bedrock calls, so
+ * their usage does NOT belong in `usage_events`; instead a lightweight monthly
+ * counter lives here:
+ *   - `braveMonthlyThreshold`: the free-tier query allowance. Once the month's
+ *     `count` reaches it, selection switches to Tavily until the month rolls.
+ *   - `braveUsage`: the running counter — `count` calls made in UTC month
+ *     `month` ("YYYY-MM"). When a call lands in a new month, the count resets.
+ *   - `highValueMinResults`: the quality-fallback gate. If Brave returns fewer
+ *     than this many usable results, the engine retries the query on Tavily.
+ *
+ * The admin CRUD surface for this document is Phase 8; Phase 7 only reads it and
+ * increments the counter.
+ */
+export const SearchSettingsSchema = z.object({
+  _id: z.literal("search"),
+  braveMonthlyThreshold: z.number().int().nonnegative(),
+  braveUsage: z.object({
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+    count: z.number().int().nonnegative(),
+  }),
+  highValueMinResults: z.number().int().nonnegative(),
+});
+export type SearchSettings = z.infer<typeof SearchSettingsSchema>;
+
 /** Any settings document, discriminated by its `_id`. */
 export const SettingsSchema = z.discriminatedUnion("_id", [
   AllowlistSettingsSchema,
@@ -121,5 +149,6 @@ export const SettingsSchema = z.discriminatedUnion("_id", [
   TiersSettingsSchema,
   GuestCircuitBreakerSettingsSchema,
   ResearchBudgetSettingsSchema,
+  SearchSettingsSchema,
 ]);
 export type Settings = z.infer<typeof SettingsSchema>;
