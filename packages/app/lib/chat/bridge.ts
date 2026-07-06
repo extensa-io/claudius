@@ -1,5 +1,9 @@
 import type { BaseMessage } from "@langchain/core/messages";
-import { MEMORIES_USED_EVENT } from "@claudius/shared";
+import {
+  MEMORIES_USED_EVENT,
+  SEARCH_SOURCE_EVENT,
+  type SearchSourceEvent,
+} from "@claudius/shared";
 import type { ClaudiusStreamWriter, UsedMemory } from "./types";
 
 /**
@@ -44,6 +48,9 @@ interface GraphStreamEvent {
     output?: unknown;
     // Custom events (dispatchCustomEvent) put their payload directly on `data`.
     memories?: unknown;
+    source?: unknown;
+    query?: unknown;
+    resultCount?: unknown;
   };
 }
 
@@ -57,6 +64,20 @@ function asUsedMemories(value: unknown): UsedMemory[] {
       typeof (m as UsedMemory).id === "string" &&
       typeof (m as UsedMemory).content === "string",
   );
+}
+
+/** Validate a search_source payload before trusting it on the wire. */
+function asSearchSource(
+  data: GraphStreamEvent["data"],
+): SearchSourceEvent | null {
+  if (!data) return null;
+  const { source, query, resultCount } = data;
+  if (source !== "brave" && source !== "tavily") return null;
+  return {
+    source,
+    query: typeof query === "string" ? query : "",
+    resultCount: typeof resultCount === "number" ? resultCount : 0,
+  };
 }
 
 function addUsage(totals: UsageTotals, usage: UsageMetadata | undefined): void {
@@ -96,6 +117,9 @@ export async function bridgeGraphEvents(
   // more text). Each segment is its own text part with a stable id.
   let textId: string | null = null;
   let textSegment = 0;
+  // A turn can run several web searches; each gets its own data-search part with
+  // a distinct id so they don't coalesce into one on the client.
+  let searchSegment = 0;
 
   const endText = (): void => {
     if (textId !== null) {
@@ -170,6 +194,18 @@ export async function bridgeGraphEvents(
               type: "data-memories",
               id: "memories",
               data: { memories },
+            });
+          }
+        } else if (ev.name === SEARCH_SOURCE_EVENT) {
+          // Which backend (Brave/Tavily) served a web search this turn. Written
+          // non-transient so it sticks to the message as an activity icon; one
+          // part per search so multiple searches each show their own icon.
+          const search = asSearchSource(ev.data);
+          if (search) {
+            writer.write({
+              type: "data-search",
+              id: `search-${searchSegment++}`,
+              data: search,
             });
           }
         }

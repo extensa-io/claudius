@@ -16,7 +16,12 @@ export const baseTools = [webSearchTool];
 /** Tools added only when the conversation has retrievable documents. */
 export const documentTools = [retrieveDocumentsTool];
 
-export { webSearchTool, type WebSearchResult } from "./webSearch";
+export {
+  webSearchTool,
+  type WebSearchResult,
+  SEARCH_SOURCE_EVENT,
+  type SearchSourceEvent,
+} from "./webSearch";
 export {
   retrieveDocumentsTool,
   type RetrievedChunk,

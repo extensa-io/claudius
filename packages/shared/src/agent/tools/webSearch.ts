@@ -1,7 +1,24 @@
+import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
+import type { RunnableConfig } from "@langchain/core/runnables";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { answerSearch } from "../../answer";
 import { AppError } from "../../errors";
+
+/**
+ * Custom event the tool emits (via dispatchCustomEvent) carrying WHICH backend
+ * served a search, so the UI can show a Brave/Tavily indicator. This rides the
+ * same LangGraph streamEvents channel as `memories_used`, deliberately OUT of the
+ * tool's output JSON: the model must not see which backend ran (it would start
+ * saying "according to Brave"), and the output contract stays byte-identical.
+ */
+export const SEARCH_SOURCE_EVENT = "search_source";
+
+export interface SearchSourceEvent {
+  source: "brave" | "tavily";
+  query: string;
+  resultCount: number;
+}
 
 /**
  * The agent's web tool. As of Phase 7 its backend is the cost-tiered answer
@@ -33,7 +50,7 @@ export interface WebSearchResult {
 }
 
 export const webSearchTool = tool(
-  async ({ query }): Promise<string> => {
+  async ({ query }, config: RunnableConfig): Promise<string> => {
     try {
       const { results, source, reason } = await answerSearch({
         query,
@@ -48,6 +65,18 @@ export const webSearchTool = tool(
         url: r.url,
         snippet: r.snippet,
       }));
+
+      // Surface the backend to the UI OUT-OF-BAND (not in the tool output the
+      // model reads), so the transcript can show a Brave/Tavily icon while the
+      // model stays blind to which backend ran. The query rides along for the
+      // tooltip; it never reaches the model via this channel either.
+      const sourceEvent: SearchSourceEvent = {
+        source,
+        query,
+        resultCount: shaped.length,
+      };
+      await dispatchCustomEvent(SEARCH_SOURCE_EVENT, sourceEvent, config);
+
       // Tool messages are strings; return JSON the model can read back and that
       // the UI can parse to render source links.
       return JSON.stringify({ results: shaped });

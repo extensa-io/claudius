@@ -3,6 +3,7 @@
 import { Brain } from "lucide-react";
 import { useState } from "react";
 import type { UsedMemory } from "@/lib/chat/types";
+import { IconChip } from "./activity-icons";
 
 const CATEGORY_LABEL: Record<UsedMemory["category"], string> = {
   fact: "fact",
@@ -47,17 +48,18 @@ export function MemoryUsedChip({
   if (retrieved.length > 0) groups.push({ label: "Recalled this turn", items: retrieved });
 
   return (
-    <div className="mt-2">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs text-primary hover:bg-primary/10"
-      >
-        <Brain className="size-3" />
-        {summarize(profile.length, retrieved.length)}
-      </button>
+    <>
+      <IconChip
+        icon={<Brain className="size-3.5" />}
+        summary={summarize(profile.length, retrieved.length)}
+        accent
+        open={open}
+        onToggle={() => setOpen((v) => !v)}
+      />
       {open && (
-        <div className="mt-2 space-y-2">
+        // basis-full so, inside the flex-wrap activity strip, the detail drops
+        // to its own row below the icons rather than squeezing into the row.
+        <div className="mt-2 w-full basis-full space-y-2">
           {groups.map((group) => (
             <div key={group.label}>
               {groups.length > 1 && (
@@ -77,6 +79,6 @@ export function MemoryUsedChip({
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }

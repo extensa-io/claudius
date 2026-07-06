@@ -19,13 +19,26 @@ import { cn } from "@/lib/utils";
  */
 export function ToolActivity({
   part,
+  suppressCompletedWebSearch = false,
 }: {
   part: DynamicToolUIPart;
+  /**
+   * When the turn carries a `data-search` activity icon (new turns), the settled
+   * web-search card is redundant, so it collapses and the icon in the strip is
+   * the resting representation. Old turns (no data part) keep the full card.
+   * The live "Searching…" indicator always shows regardless.
+   */
+  suppressCompletedWebSearch?: boolean;
 }): React.ReactNode {
   if (part.toolName === "retrieve_documents") {
     return <RetrieveActivity part={part} />;
   }
-  return <WebSearchActivity part={part} />;
+  return (
+    <WebSearchActivity
+      part={part}
+      suppressCompleted={suppressCompletedWebSearch}
+    />
+  );
 }
 
 function queryOf(part: DynamicToolUIPart): string {
@@ -44,8 +57,10 @@ function isWebSearchOutput(value: unknown): value is WebSearchToolOutput {
 
 function WebSearchActivity({
   part,
+  suppressCompleted = false,
 }: {
   part: DynamicToolUIPart;
+  suppressCompleted?: boolean;
 }): React.ReactNode {
   const [open, setOpen] = useState(false);
   const query = queryOf(part);
@@ -72,6 +87,10 @@ function WebSearchActivity({
   }
 
   if (part.state !== "output-available") return null;
+
+  // New turns show the settled result as an icon in the activity strip (driven
+  // by the data-search part), so the full card here would duplicate it.
+  if (suppressCompleted) return null;
 
   const results = isWebSearchOutput(part.output) ? part.output.results : [];
 

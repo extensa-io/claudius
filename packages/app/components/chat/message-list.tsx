@@ -2,7 +2,12 @@
 
 import type { DynamicToolUIPart } from "ai";
 import { useEffect, useRef } from "react";
-import type { ClaudiusUIMessage, UsedMemory } from "@/lib/chat/types";
+import type {
+  ClaudiusUIMessage,
+  SearchActivityDataPart,
+  UsedMemory,
+} from "@/lib/chat/types";
+import { SearchActivityChip } from "./activity-icons";
 import { Markdown } from "./markdown";
 import { MemoryUsedChip } from "./memory-used-chip";
 import { ReportControls } from "./report-controls";
@@ -76,40 +81,64 @@ export function MessageList({
               </div>
             </div>
           ) : (
-            <div
-              key={message.id}
-              className="max-w-none text-[0.95rem] leading-7"
-            >
-              {message.metadata?.research && (
-                <ReportControls
-                  question={message.metadata.research.question}
-                  report={messageText(message)}
-                  jobId={message.metadata.research.jobId}
-                  onRefine={onRefine ?? (() => {})}
-                />
-              )}
-              {message.parts.map((part, i) => {
-                if (part.type === "text") {
-                  return <Markdown key={i}>{part.text}</Markdown>;
-                }
-                if (part.type === "dynamic-tool") {
-                  return (
-                    <ToolActivity key={i} part={part as DynamicToolUIPart} />
-                  );
-                }
-                return null;
-              })}
-              {/* Footer chip: which memories informed this turn (if any). */}
-              {(() => {
-                const used = message.parts.find(
-                  (p): p is { type: "data-memories"; data: { memories: UsedMemory[] } } =>
-                    p.type === "data-memories",
-                );
-                return used ? (
-                  <MemoryUsedChip memories={used.data.memories} />
-                ) : null;
-              })()}
-            </div>
+            (() => {
+              // Activity for this turn: which memories informed it, and which
+              // backend served each web search. Both render as compact icons in
+              // one strip under the answer. When search icons are present, the
+              // settled web-search cards collapse (the icon is their resting form).
+              const usedMemories = message.parts.find(
+                (p): p is { type: "data-memories"; data: { memories: UsedMemory[] } } =>
+                  p.type === "data-memories",
+              );
+              const searches = message.parts.filter(
+                (p): p is { type: "data-search"; data: SearchActivityDataPart } =>
+                  p.type === "data-search",
+              );
+              const hasSearchIcons = searches.length > 0;
+              const hasActivity = Boolean(usedMemories) || hasSearchIcons;
+
+              return (
+                <div
+                  key={message.id}
+                  className="max-w-none text-[0.95rem] leading-7"
+                >
+                  {message.metadata?.research && (
+                    <ReportControls
+                      question={message.metadata.research.question}
+                      report={messageText(message)}
+                      jobId={message.metadata.research.jobId}
+                      onRefine={onRefine ?? (() => {})}
+                    />
+                  )}
+                  {message.parts.map((part, i) => {
+                    if (part.type === "text") {
+                      return <Markdown key={i}>{part.text}</Markdown>;
+                    }
+                    if (part.type === "dynamic-tool") {
+                      return (
+                        <ToolActivity
+                          key={i}
+                          part={part as DynamicToolUIPart}
+                          suppressCompletedWebSearch={hasSearchIcons}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+                  {/* Compact activity strip: memory + web-search backend icons. */}
+                  {hasActivity && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {usedMemories && (
+                        <MemoryUsedChip memories={usedMemories.data.memories} />
+                      )}
+                      {searches.map((s, i) => (
+                        <SearchActivityChip key={i} search={s.data} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           ),
         )}
 

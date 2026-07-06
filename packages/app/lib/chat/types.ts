@@ -34,6 +34,19 @@ export interface MemoriesDataPart {
 }
 
 /**
+ * Emitted once per web search (via the graph's `search_source` custom event),
+ * carrying WHICH backend served the query so the transcript can show a
+ * Brave/Tavily icon. Written NON-transient so it sticks to the assistant message
+ * and renders in the activity strip on reload. Deliberately arrives out-of-band
+ * from the tool output, so the model never learns which backend ran.
+ */
+export interface SearchActivityDataPart {
+  source: "brave" | "tavily";
+  query: string;
+  resultCount: number;
+}
+
+/**
  * Message-level metadata. A finished research report is a normal assistant
  * message (so it sits at its chronological place in the thread and never floats),
  * tagged with `research` so the UI can give it a "Research report" header and a
@@ -45,10 +58,14 @@ export interface ClaudiusMessageMetadata {
   research?: { question: string; jobId?: string };
 }
 
-/** Claudius's UIMessage shape: research metadata, two custom data parts. */
+/** Claudius's UIMessage shape: research metadata, custom data parts. */
 export type ClaudiusUIMessage = UIMessage<
   ClaudiusMessageMetadata,
-  { conversation: ConversationDataPart; memories: MemoriesDataPart }
+  {
+    conversation: ConversationDataPart;
+    memories: MemoriesDataPart;
+    search: SearchActivityDataPart;
+  }
 >;
 
 export type ClaudiusStreamWriter = UIMessageStreamWriter<ClaudiusUIMessage>;
