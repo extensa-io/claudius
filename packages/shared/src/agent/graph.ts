@@ -15,7 +15,12 @@ import { getProfileMemories, retrieveMemories } from "../memory/retrieve";
 import type { RetrievedMemory } from "../memory/types";
 import { getCheckpointer } from "./checkpointer";
 import { buildChatModel } from "./model";
-import { attachedDocumentsNote, memoriesNote, SYSTEM_PROMPT } from "./prompts";
+import {
+  attachedDocumentsNote,
+  currentDateLine,
+  memoriesNote,
+  SYSTEM_PROMPT,
+} from "./prompts";
 import { baseTools, documentTools, tools } from "./tools";
 
 /**
@@ -176,11 +181,13 @@ async function agent(
   const boundTools = hasDocuments
     ? [...baseTools, ...documentTools]
     : baseTools;
-  // Build the system prompt fresh each turn from three parts, none persisted:
-  // the base identity, the memory block load_context retrieved (if any), and the
-  // attached-documents note (if any). Memory comes before the docs note so the
-  // model reads durable user context before task-specific material.
-  const sections = [SYSTEM_PROMPT];
+  // Build the system prompt fresh each turn from parts, none persisted: the
+  // current date (so the model is grounded in the present, not its training
+  // cutoff), the base identity, the memory block load_context retrieved (if
+  // any), and the attached-documents note (if any). The date leads so the
+  // prompt's "the current date and time above" reference resolves; memory comes
+  // before the docs note so the model reads durable user context first.
+  const sections = [currentDateLine(new Date()), SYSTEM_PROMPT];
   if (state.memoryContext.length > 0) sections.push(state.memoryContext);
   if (hasDocuments) {
     sections.push(attachedDocumentsNote(attachedDocumentNames ?? []));

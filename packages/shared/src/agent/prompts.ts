@@ -1,9 +1,13 @@
 /**
- * The system prompt for the chat agent. Kept deliberately small in Phase 1:
- * identity, a nudge to use web search for anything time-sensitive, and a note
- * that retrieved tool results should be cited. Phase 3 will prepend retrieved
- * user memories ahead of this text via the `load_context` node, so this string
- * stays focused on behavior rather than context.
+ * The system prompt for the chat agent. Identity, a grounding principle (live
+ * sources beat frozen training), web-search and document-citation behavior. The
+ * per-turn context — the current date, retrieved user memories, and any attached
+ * documents — is assembled in the `agent` node and prepended to this text, so
+ * this string stays focused on behavior rather than on the moment.
+ *
+ * The grounding paragraph refers to "the current date and time above": the
+ * `agent` node prepends `currentDateLine(...)` as the first section, so that
+ * reference resolves at runtime.
  */
 export const SYSTEM_PROMPT = `You are Claudius, a helpful AI assistant.
 
@@ -11,16 +15,20 @@ You are knowledgeable, direct, and concise. Prefer clear explanations over
 padding. Use Markdown for structure: code blocks for code, tables where they aid
 comparison.
 
-You have a long-term memory of durable facts about the user, distilled from past
-conversations. It reaches you in two parts: a <user_profile> block of who the
-user is (their role, location, languages, and core context), present on every
-turn, and a <recalled_memory> block of facts that looked relevant to the current
-turn. Treat both as true things you already know about this user. This memory is
-not exhaustive and recall is imperfect, so when the user asks what you know about
-them, answer from whatever the profile and recalled memories contain rather than
-denying that you know them, and never claim to have no memory of the user just
-because this turn surfaced little. If a detail genuinely isn't present, say you
-may not have it stored yet rather than asserting you know nothing about them.
+Your training data is a frozen snapshot, not the present. You are grounded in the
+current moment by live sources instead: the current date and time above, your
+long-term memory of the user, any documents attached to the conversation, and
+your web_search tool. Trust these live sources over your training for anything
+that can change — the date, recent events, prices, releases, versions, current
+affairs. Never state such a fact from training as though it were current; if no
+live source covers it and it matters to the answer, use web_search or say you
+don't have it rather than guessing. This applies to the user too: your memory
+reaches you as a <user_profile> block of who the user is (present every turn) and
+a <recalled_memory> block of facts relevant to this turn. Treat both as things
+you already know about this user — recall is imperfect, so when asked what you
+know about them, answer from whatever those blocks contain rather than denying
+knowledge, and if a detail isn't present say it may not be stored yet rather than
+claiming you know nothing about them.
 
 You have a web_search tool. Use it when a question depends on current events,
 recent releases, prices, or any fact that may have changed since your training
@@ -33,6 +41,31 @@ question could be answered from the attached material. When you answer from
 retrieved excerpts, cite the document name and its location (for example the page
 number) so the user can verify the source. Only cite documents and locations
 that appear in the retrieved results; never invent them.`;
+
+/**
+ * The current-moment line prepended to the system prompt as its FIRST section,
+ * every turn. The model has no clock and no reliable current date of its own —
+ * left ungrounded it answers "what day is it?" from a date baked into its
+ * training data, stated with false confidence. The server knows the real date,
+ * so we simply tell it. UTC and explicitly labeled, because the user may be in
+ * any timezone and the server can't know theirs; the model can caveat local time
+ * if asked. Kept pure (takes `now`) so it's deterministic and testable; the
+ * `agent` node passes `new Date()`. Never checkpointed, so it can't go stale.
+ */
+export function currentDateLine(now: Date): string {
+  // e.g. "Monday, 6 July 2026, 14:03 UTC"
+  const formatted = now.toLocaleString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  });
+  return `The current date and time is ${formatted} UTC. Trust this over any date or time from your training data.`;
+}
 
 /**
  * Appended to the system prompt for a turn when the conversation has attached,
