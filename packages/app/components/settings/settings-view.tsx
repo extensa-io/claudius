@@ -1,13 +1,17 @@
 "use client";
 
 import type { UserSettingsView } from "@claudius/shared";
-import {
-  USER_INSTRUCTIONS_MAX,
-  USER_PREFERRED_NAME_MAX,
-} from "@claudius/shared";
 import { ArrowLeft, Check, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+
+// Field caps, mirrored from UserSettingsSchema in @claudius/shared. Inlined
+// rather than value-imported: this is a client component, and importing a value
+// from the shared barrel would drag the server graph (mongodb, tavily) into the
+// client bundle. The Zod schema at the API boundary is the real enforcement;
+// these just drive the input maxLength and counter. Keep in sync with the schema.
+const USER_PREFERRED_NAME_MAX = 100;
+const USER_INSTRUCTIONS_MAX = 4000;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
