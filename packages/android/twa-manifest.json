@@ -13,8 +13,8 @@
   "backgroundColor": "#13110f",
   "enableNotifications": false,
   "startUrl": "/chat",
-  "iconUrl": "http://localhost:3999/icon-512.png",
-  "maskableIconUrl": "http://localhost:3999/icon-512-maskable.png",
+  "iconUrl": "https://www.askclaudius.dev/icon-512.png",
+  "maskableIconUrl": "https://www.askclaudius.dev/icon-512-maskable.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "./android.keystore",
@@ -24,7 +24,7 @@
   "appVersionCode": 1,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "http://localhost:3999/manifest.webmanifest",
+  "webManifestUrl": "https://www.askclaudius.dev/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {},
   "alphaDependencies": {
