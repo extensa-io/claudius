@@ -18,7 +18,12 @@ export const metadata: Metadata = {
     title: "Claudius",
     statusBarStyle: "black-translucent",
   },
+  // Declaring metadata.icons switches Next off the app/icon.svg file convention
+  // for emitting <link rel="icon">, so the browser favicon must be listed here
+  // explicitly alongside apple — otherwise only the apple-touch-icon link ships
+  // and the tab favicon disappears.
   icons: {
+    icon: "/icon.svg",
     apple: "/apple-touch-icon.png",
   },
 };
