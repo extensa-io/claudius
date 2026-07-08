@@ -1,5 +1,6 @@
 export * from "./common";
 export * from "./user";
+export * from "./userSettings";
 export * from "./conversation";
 export * from "./memory";
 export * from "./document";

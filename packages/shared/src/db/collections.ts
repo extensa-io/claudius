@@ -11,6 +11,7 @@ import type {
   Settings,
   UsageEvent,
   User,
+  UserSettings,
 } from "./schemas";
 
 /**
@@ -21,6 +22,9 @@ import type {
  */
 export const COLLECTIONS = {
   users: "users",
+  // Per-user, user-AUTHORED personalization (preferred name + instructions),
+  // distinct from the inferred `memories`. Keyed by _id = user._id.
+  userSettings: "user_settings",
   conversations: "conversations",
   memories: "memories",
   documents: "documents",
@@ -37,6 +41,10 @@ export const COLLECTIONS = {
 
 export async function usersCol(): Promise<Collection<User>> {
   return (await getDb()).collection<User>(COLLECTIONS.users);
+}
+
+export async function userSettingsCol(): Promise<Collection<UserSettings>> {
+  return (await getDb()).collection<UserSettings>(COLLECTIONS.userSettings);
 }
 
 export async function conversationsCol(): Promise<Collection<Conversation>> {

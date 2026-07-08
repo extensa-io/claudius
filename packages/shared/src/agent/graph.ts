@@ -20,6 +20,7 @@ import {
   currentDateLine,
   memoriesNote,
   SYSTEM_PROMPT,
+  userSettingsNote,
 } from "./prompts";
 import { baseTools, documentTools, tools } from "./tools";
 
@@ -77,6 +78,14 @@ export interface ChatGraphConfigurable {
    * enabled, matching the provisioning default.
    */
   memoryEnabled?: boolean;
+  /**
+   * The user's authored settings: a preferred name and a freeform instructions
+   * block. Injected verbatim into the system prompt above the inferred memory
+   * block, and outranking it (see userSettingsNote). Members and admins only —
+   * the route leaves these absent for guests, so the section is simply omitted.
+   */
+  preferredName?: string | null;
+  customInstructions?: string | null;
 }
 
 function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
@@ -172,8 +181,14 @@ async function agent(
   state: GraphState,
   config: RunnableConfig,
 ): Promise<GraphUpdate> {
-  const { inferenceProfileId, maxTokens, attachedDocumentIds, attachedDocumentNames } =
-    readConfigurable(config);
+  const {
+    inferenceProfileId,
+    maxTokens,
+    attachedDocumentIds,
+    attachedDocumentNames,
+    preferredName,
+    customInstructions,
+  } = readConfigurable(config);
   // Offer retrieve_documents only when this conversation actually has embedded
   // documents, so the model never reaches for document search on a plain chat.
   const hasDocuments =
@@ -183,11 +198,17 @@ async function agent(
     : baseTools;
   // Build the system prompt fresh each turn from parts, none persisted: the
   // current date (so the model is grounded in the present, not its training
-  // cutoff), the base identity, the memory block load_context retrieved (if
-  // any), and the attached-documents note (if any). The date leads so the
-  // prompt's "the current date and time above" reference resolves; memory comes
-  // before the docs note so the model reads durable user context first.
+  // cutoff), the base identity, the user's authored settings (if any), the
+  // memory block load_context retrieved (if any), and the attached-documents
+  // note (if any). The date leads so the prompt's "the current date and time
+  // above" reference resolves. The authored settings sit ABOVE memory and
+  // outrank it: what the user explicitly told us wins over what we inferred.
   const sections = [currentDateLine(new Date()), SYSTEM_PROMPT];
+  const settingsNote = userSettingsNote({
+    preferredName: preferredName ?? null,
+    instructions: customInstructions ?? null,
+  });
+  if (settingsNote) sections.push(settingsNote);
   if (state.memoryContext.length > 0) sections.push(state.memoryContext);
   if (hasDocuments) {
     sections.push(attachedDocumentsNote(attachedDocumentNames ?? []));

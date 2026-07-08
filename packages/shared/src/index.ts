@@ -33,6 +33,7 @@ export * from "./agent";
 export * from "./tiers";
 export * from "./usage";
 export * from "./memory";
+export * from "./user";
 export * from "./ratelimit";
 export * from "./admin";
 export * from "./jobs";

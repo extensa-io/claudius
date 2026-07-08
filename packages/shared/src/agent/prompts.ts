@@ -28,7 +28,10 @@ a <recalled_memory> block of facts relevant to this turn. Treat both as things
 you already know about this user — recall is imperfect, so when asked what you
 know about them, answer from whatever those blocks contain rather than denying
 knowledge, and if a detail isn't present say it may not be stored yet rather than
-claiming you know nothing about them.
+claiming you know nothing about them. Separately, the user may give you explicit
+instructions of their own — a preferred name and a <user_instructions> block of
+how they want you to respond. That is authored by the user, not inferred, so
+follow it; when it conflicts with a recalled memory, the instructions win.
 
 You have a web_search tool. Use it when a question depends on current events,
 recent releases, prices, or any fact that may have changed since your training
@@ -77,6 +80,42 @@ export function currentDateLine(now: Date): string {
 export function attachedDocumentsNote(filenames: string[]): string {
   const list = filenames.length > 0 ? filenames.join(", ") : "one or more files";
   return `The user has already attached the following document(s) to THIS conversation: ${list}. They are available to you right now through the retrieve_documents tool. When the user's question may relate to them, call retrieve_documents to read the relevant passages before answering, and cite the document name and location. Never claim that no document is attached, and never ask the user to upload a document that is already listed here.`;
+}
+
+/**
+ * The user-AUTHORED settings block, prepended to the system prompt after the
+ * base identity and BEFORE the memory block. This is the layer the user typed
+ * themselves — a preferred name and freeform instructions — as opposed to the
+ * memory blocks the system inferred from past conversations. It therefore
+ * outranks memory: the closing line tells the model that when a recalled memory
+ * contradicts these instructions, the instructions win. Precedence is
+ * prompt-level only; it cannot loosen a tier, unlock a model, or reach another
+ * user's data, since those are enforced in code, not in this text.
+ *
+ * Kept pure and returning `null` when the user has authored nothing, so the
+ * agent node omits the section entirely rather than injecting an empty shell.
+ */
+export function userSettingsNote(params: {
+  preferredName: string | null;
+  instructions: string | null;
+}): string | null {
+  const preferredName = params.preferredName?.trim() || null;
+  const instructions = params.instructions?.trim() || null;
+  if (!preferredName && !instructions) return null;
+
+  const sections: string[] = [
+    "The user has set the following personal instructions for you. Unlike your memory, which you inferred from past conversations, this is what the user has explicitly told you about themselves and how they want you to respond. Follow it. When it conflicts with a recalled memory, these instructions take precedence.",
+  ];
+
+  if (preferredName) {
+    sections.push(`The user prefers to be called ${preferredName}.`);
+  }
+
+  if (instructions) {
+    sections.push(`<user_instructions>\n${instructions}\n</user_instructions>`);
+  }
+
+  return sections.join("\n\n");
 }
 
 interface NoteMemory {

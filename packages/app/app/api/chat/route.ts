@@ -6,6 +6,7 @@ import {
   AppError,
   assertCanInvoke,
   getChatGraph,
+  getUserSettings,
   isAppError,
   loadSearchSettings,
   writeUsageEvent,
@@ -140,6 +141,15 @@ export const POST = auth(async (req) => {
     const attachedDocumentIds = attachedDocs.map((d) => d.id);
     const attachedDocumentNames = attachedDocs.map((d) => d.filename);
 
+    // User-authored personalization (preferred name + instructions), injected
+    // into the prompt above and outranking inferred memory. Members and admins
+    // only: guests never author settings, so we skip the read entirely for them
+    // and leave the fields absent (the prompt section is then omitted).
+    const userSettings =
+      role === "guest"
+        ? { preferredName: null, instructions: null }
+        : await getUserSettings(userId);
+
     const graph = await getChatGraph();
 
     const stream = createUIMessageStream<ClaudiusUIMessage>({
@@ -175,6 +185,8 @@ export const POST = auth(async (req) => {
               attachedDocumentNames,
               // load_context skips retrieval entirely when memory is off.
               memoryEnabled: grant.memoryEnabled,
+              preferredName: userSettings.preferredName,
+              customInstructions: userSettings.instructions,
             },
             signal: req.signal,
           },

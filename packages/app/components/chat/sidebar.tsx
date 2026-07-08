@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, Brain, Loader2, Plus, Shield } from "lucide-react";
+import { Archive, Brain, Loader2, Plus, Settings, Shield } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
@@ -82,6 +82,17 @@ export function Sidebar({
         <Brain className="size-4" />
         Memory
       </Link>
+
+      {/* Authored settings are member/admin-only; guests can't personalize. */}
+      {user.role !== "guest" && (
+        <Link
+          href="/settings"
+          className="mx-2 mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
+        >
+          <Settings className="size-4" />
+          Instructions
+        </Link>
+      )}
 
       {user.role === "admin" && (
         <Link
