@@ -42,3 +42,15 @@ Thumbs.db
 
 # Vercel
 .vercel
+
+# Android (packages/android is tracked, but signing secrets and build output
+# never are — the keystore is the one artifact that must stay off the public repo)
+*.keystore
+*.jks
+packages/android/**/keystore.properties
+packages/android/**/local.properties
+packages/android/**/.gradle/
+packages/android/**/build/
+packages/android/**/*.apk
+packages/android/**/*.aab
+packages/android/**/*.idsig

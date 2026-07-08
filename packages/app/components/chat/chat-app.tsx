@@ -39,6 +39,7 @@ export function ChatApp({
   initialDocuments,
   initialJobs,
   budget,
+  initialPrompt,
 }: {
   user: SidebarUser;
   initialConversations: ConversationSummary[];
@@ -48,6 +49,12 @@ export function ChatApp({
   initialDocuments: DocumentView[];
   initialJobs: JobView[];
   budget: BudgetInfo | null;
+  /**
+   * A `?q=` deep-link query to auto-send as the first message of a new
+   * conversation (Phase 9 widget path). Null unless the page was opened with a
+   * `q` param and no `c`. ChatPane fires it exactly once on mount.
+   */
+  initialPrompt: string | null;
 }): React.ReactNode {
   const [conversations, setConversations] = useState(initialConversations);
   const [activeId, setActiveId] = useState<string | null>(
@@ -62,6 +69,13 @@ export function ChatApp({
     initialConversationId ?? "new-0",
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // The `?q=` deep-link prompt is consumed once by the initial pane. Clear it as
+  // soon as it's sent, and on any navigation, so a later "new chat" or a
+  // conversation switch never re-injects it.
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(
+    initialConversationId ? null : initialPrompt,
+  );
 
   const activeModelId =
     conversations.find((c) => c.id === initialConversationId)?.modelId ??
@@ -85,6 +99,7 @@ export function ChatApp({
   const selectConversation = useCallback(
     async (id: string): Promise<void> => {
       setSidebarOpen(false);
+      setPendingPrompt(null);
       if (id === activeId) return;
       const res = await fetch(`/api/conversations/${id}`);
       if (!res.ok) return;
@@ -111,6 +126,7 @@ export function ChatApp({
 
   const newChat = useCallback((): void => {
     setSidebarOpen(false);
+    setPendingPrompt(null);
     setActiveId(null);
     setSeedMessages([]);
     setSeedDocuments([]);
@@ -205,6 +221,8 @@ export function ChatApp({
             onConversationCreated={onConversationCreated}
             onTurnComplete={onTurnComplete}
             onOpenSidebar={() => setSidebarOpen(true)}
+            initialPrompt={activeId === null ? pendingPrompt : null}
+            onPromptConsumed={() => setPendingPrompt(null)}
           />
         </main>
       </div>

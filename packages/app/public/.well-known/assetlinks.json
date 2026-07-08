@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "dev.askclaudius.twa",
+      "sha256_cert_fingerprints": [
+        "B4:01:E7:E7:C2:D8:95:F0:9D:24:41:F5:31:D9:81:62:43:7A:23:FC:2B:DD:0A:BF:C6:B4:97:2E:B9:0B:96:02"
+      ]
+    }
+  }
+]

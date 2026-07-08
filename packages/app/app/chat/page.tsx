@@ -10,6 +10,7 @@ import { ChatApp, type BudgetInfo } from "@/components/chat/chat-app";
 import { auth } from "@/lib/auth";
 import { signOut } from "@/lib/auth";
 import { getOwnedConversation, listConversations } from "@/lib/chat/conversations";
+import { sanitizeDeepLinkQuery } from "@/lib/chat/deep-link";
 import { toUIMessages } from "@/lib/chat/messages";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type { DocumentView } from "@/lib/chat/view-types";
@@ -28,7 +29,7 @@ export const runtime = "nodejs";
 export default async function ChatPage({
   searchParams,
 }: {
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; q?: string }>;
 }): Promise<React.ReactNode> {
   const session = await auth();
   if (!session?.user) redirect("/");
@@ -61,7 +62,14 @@ export default async function ChatPage({
   }
 
   const userId = new ObjectId(session.user.id);
-  const { c } = await searchParams;
+  const { c, q } = await searchParams;
+
+  // Deep-link auto-send (Phase 9): `?q=` seeds and sends the first message of a
+  // NEW conversation, used by the Android home-screen widget. It only applies
+  // when there's no `c` (a resumed conversation ignores it), and it's sanitized
+  // to plain text here. The client fires it through the normal composer send
+  // path, so tier enforcement, usage_events, and userId scoping all still apply.
+  const initialPrompt = c ? null : sanitizeDeepLinkQuery(q);
 
   // Lazy memory extraction (Phase 3, now enqueue-only in Phase 5): after this
   // page responds, ENQUEUE extraction jobs for a few of the user's conversations
@@ -136,6 +144,7 @@ export default async function ChatPage({
       initialDocuments={initialDocuments}
       initialJobs={initialJobs}
       budget={budget}
+      initialPrompt={initialPrompt}
     />
   );
 }

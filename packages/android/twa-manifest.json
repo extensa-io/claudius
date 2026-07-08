@@ -1,0 +1,40 @@
+{
+  "packageId": "dev.askclaudius.twa",
+  "host": "www.askclaudius.dev",
+  "name": "Claudius",
+  "launcherName": "Claudius",
+  "display": "standalone",
+  "themeColor": "#13110f",
+  "themeColorDark": "#13110f",
+  "navigationColor": "#13110f",
+  "navigationColorDark": "#13110f",
+  "navigationDividerColor": "#13110f",
+  "navigationDividerColorDark": "#13110f",
+  "backgroundColor": "#13110f",
+  "enableNotifications": false,
+  "startUrl": "/chat",
+  "iconUrl": "http://localhost:3999/icon-512.png",
+  "maskableIconUrl": "http://localhost:3999/icon-512-maskable.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "claudius"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "http://localhost:3999/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://www.askclaudius.dev/",
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": []
+}

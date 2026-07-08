@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The home-screen widget: a pill styled to look like a search box. It is not an
+    editable field (RemoteViews can't host one); tapping anywhere on it opens the
+    SearchInputActivity, which has the real text field.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_search_bar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/widget_search_background"
+    android:padding="14dp">
+
+    <ImageView
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginEnd="10dp"
+        android:src="@drawable/ic_widget_search"
+        android:contentDescription="@string/widget_search_hint" />
+
+    <TextView
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="@string/widget_search_hint"
+        android:textColor="#B8B2A8"
+        android:textSize="15sp"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+</LinearLayout>

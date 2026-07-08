@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { PanelLeft } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Role } from "@claudius/shared";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type { DocumentView, ModelOption } from "@/lib/chat/view-types";
@@ -33,6 +33,8 @@ export function ChatPane({
   onConversationCreated,
   onTurnComplete,
   onOpenSidebar,
+  initialPrompt,
+  onPromptConsumed,
 }: {
   conversationId: string | null;
   initialMessages: ClaudiusUIMessage[];
@@ -45,6 +47,10 @@ export function ChatPane({
   onConversationCreated: (id: string, title: string) => void;
   onTurnComplete: () => void;
   onOpenSidebar: () => void;
+  /** `?q=` deep-link prompt to auto-send once on mount (Phase 9 widget path). */
+  initialPrompt?: string | null;
+  /** Called after the deep-link prompt has been sent, so the parent clears it. */
+  onPromptConsumed?: () => void;
 }): React.ReactNode {
   const canAttach = role !== "guest";
   const canResearch = role !== "guest";
@@ -201,6 +207,33 @@ export function ChatPane({
       },
     );
   };
+
+  // Deep-link auto-send (Phase 9): if the page was opened with a `?q=` query on
+  // a fresh conversation, submit it once as the first message through the exact
+  // same path as a typed message. The ref latch guarantees a single fire despite
+  // React strict-mode double-invocation and re-renders; we also strip `q` from
+  // the URL immediately so a refresh before the conversation exists can't
+  // re-send. Guarded on conversationId === null so it never fires on a resumed
+  // thread. `send`/`onPromptConsumed` are intentionally not in the deps: this is
+  // a one-shot on mount, keyed by the presence of a prompt.
+  const promptFired = useRef(false);
+  useEffect(() => {
+    if (promptFired.current) return;
+    if (conversationId !== null) return;
+    const prompt = initialPrompt?.trim();
+    if (!prompt) return;
+    promptFired.current = true;
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("q")) {
+        url.searchParams.delete("q");
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
+    }
+    send(prompt);
+    onPromptConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt, conversationId]);
 
   const isEmpty = messages.length === 0 && research.jobs.length === 0;
   const researchFooter =

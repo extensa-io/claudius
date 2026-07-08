@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    App Widget metadata. A wide, short search bar (roughly 4x1 cells), resizable
+    horizontally. updatePeriodMillis is 0: the widget is static (it only launches
+    an activity), so it never needs the system to refresh it.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_search"
+    android:previewImage="@drawable/ic_widget_search"
+    android:resizeMode="horizontal"
+    android:widgetCategory="home_screen" />

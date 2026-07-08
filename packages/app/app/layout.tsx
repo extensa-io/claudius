@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -11,6 +11,27 @@ const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 export const metadata: Metadata = {
   title: "Claudius",
   description: "Building my own Claude-based chatbot, powered by MongoDB.",
+  // PWA / iOS Add-to-Home-Screen parity. The manifest (app/manifest.ts) covers
+  // Android; these cover the iOS home-screen icon and standalone status bar.
+  appleWebApp: {
+    capable: true,
+    title: "Claudius",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
+};
+
+// viewport-fit=cover lets the app draw under the notch / gesture bar so
+// env(safe-area-inset-*) resolves to real values (the composer already pads by
+// safe-area-inset-bottom). themeColor tints the Android status/URL bar to match
+// the dark app chrome (#13110f = dark-theme background).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#13110f",
 };
 
 export default function RootLayout({

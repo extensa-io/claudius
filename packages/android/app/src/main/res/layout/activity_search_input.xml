@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The transparent host activity launched from the widget. A dim scrim fills the
+    screen (tap to dismiss); a single-line search field sits near the top with the
+    keyboard raised. Submitting deep-links into a new Claudius chat.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/search_scrim"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#99000000">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="80dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:orientation="vertical"
+        android:background="@drawable/widget_search_background"
+        android:padding="8dp"
+        android:clickable="true"
+        android:focusable="true">
+
+        <EditText
+            android:id="@+id/search_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/widget_search_hint"
+            android:textColor="#F4EEE3"
+            android:textColorHint="#B8B2A8"
+            android:background="@null"
+            android:padding="12dp"
+            android:inputType="text"
+            android:imeOptions="actionSearch"
+            android:singleLine="true"
+            android:importantForAutofill="no" />
+
+    </LinearLayout>
+
+</FrameLayout>

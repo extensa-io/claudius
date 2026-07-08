@@ -100,7 +100,9 @@ export function MessageList({
               return (
                 <div
                   key={message.id}
-                  className="max-w-none text-[0.95rem] leading-7"
+                  // min-w-0 so a long unbroken code line scrolls inside its own
+                  // block on narrow screens rather than widening the whole column.
+                  className="min-w-0 max-w-none text-[0.95rem] leading-7"
                 >
                   {message.metadata?.research && (
                     <ReportControls
