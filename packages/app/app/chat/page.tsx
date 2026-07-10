@@ -4,6 +4,7 @@ import { after } from "next/server";
 import {
   getMonthlyBudgetStatus,
   getUsableModels,
+  getUserSettings,
   loadThreadMessages,
 } from "@claudius/shared";
 import { ChatApp, type BudgetInfo } from "@/components/chat/chat-app";
@@ -88,15 +89,28 @@ export default async function ChatPage({
     }
   });
 
-  const [conversations, modelEntries, budgetStatus] = await Promise.all([
-    listConversations(userId),
-    getUsableModels(userId),
-    getMonthlyBudgetStatus(userId),
-  ]);
+  // The sticky model preference is a member/admin feature: guests never get a
+  // user_settings document, so skip the read for them entirely (invariant #4).
+  const [conversations, modelEntries, budgetStatus, userSettings] =
+    await Promise.all([
+      listConversations(userId),
+      getUsableModels(userId),
+      getMonthlyBudgetStatus(userId),
+      session.user.role === "guest" ? null : getUserSettings(userId),
+    ]);
   const models = modelEntries.map((m) => ({
     id: m.id,
     displayName: m.displayName,
   }));
+
+  // Seed new conversations from the remembered choice, but only if it's still a
+  // model the user may use (a role or catalog change can strip access). Null
+  // otherwise, and ChatApp falls back to the first allowed model.
+  const preferredModelId =
+    userSettings?.preferredModelId != null &&
+    models.some((m) => m.id === userSettings.preferredModelId)
+      ? userSettings.preferredModelId
+      : null;
 
   // Surface the monthly budget banner only when it's limited and at/near cap.
   const budget: BudgetInfo | null =
@@ -139,6 +153,7 @@ export default async function ChatPage({
       }}
       initialConversations={conversations}
       models={models}
+      preferredModelId={preferredModelId}
       initialConversationId={initialConversationId}
       initialMessages={initialMessages}
       initialDocuments={initialDocuments}

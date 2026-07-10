@@ -16,6 +16,7 @@ import type { Bang, CacheTtls } from "../db/schemas";
  */
 export const DEFAULT_BANGS: Bang[] = [
   { token: "g", urlTemplate: "https://www.google.com/search?q={query}" },
+  { token: "k", urlTemplate: "https://kagi.com/search?q={query}" },
   { token: "gh", urlTemplate: "https://github.com/search?q={query}&type=repositories" },
   { token: "w", urlTemplate: "https://en.wikipedia.org/w/index.php?search={query}" },
   { token: "so", urlTemplate: "https://stackoverflow.com/search?q={query}" },

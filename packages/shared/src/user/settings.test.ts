@@ -25,6 +25,7 @@ describe("getUserSettings", () => {
     expect(await getUserSettings(userId)).toEqual({
       preferredName: null,
       instructions: null,
+      preferredModelId: null,
     });
   });
 
@@ -33,6 +34,19 @@ describe("getUserSettings", () => {
     expect(await getUserSettings(userId)).toEqual({
       preferredName: "Néstor",
       instructions: null,
+      preferredModelId: null,
+    });
+  });
+
+  it("returns the stored preferred model id", async () => {
+    findOne.mockResolvedValue({
+      _id: userId,
+      preferredModelId: "claude-opus-4-8",
+    });
+    expect(await getUserSettings(userId)).toEqual({
+      preferredName: null,
+      instructions: null,
+      preferredModelId: "claude-opus-4-8",
     });
   });
 });
@@ -82,5 +96,24 @@ describe("updateUserSettings", () => {
 
     const [, update] = updateOne.mock.calls[0]!;
     expect("instructions" in update.$set).toBe(false);
+    expect("preferredModelId" in update.$set).toBe(false);
+  });
+
+  it("persists the sticky model choice", async () => {
+    updateOne.mockResolvedValue({});
+    findOne.mockResolvedValue({
+      _id: userId,
+      preferredModelId: "claude-opus-4-8",
+    });
+
+    await updateUserSettings(
+      userId,
+      { preferredModelId: "claude-opus-4-8" },
+      now,
+    );
+
+    const [, update] = updateOne.mock.calls[0]!;
+    expect(update.$set.preferredModelId).toBe("claude-opus-4-8");
+    expect("preferredName" in update.$set).toBe(false);
   });
 });

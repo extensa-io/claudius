@@ -10,9 +10,14 @@ import type { UserSettings } from "../db/schemas";
 export interface UserSettingsView {
   preferredName: string | null;
   instructions: string | null;
+  preferredModelId: string | null;
 }
 
-const EMPTY: UserSettingsView = { preferredName: null, instructions: null };
+const EMPTY: UserSettingsView = {
+  preferredName: null,
+  instructions: null,
+  preferredModelId: null,
+};
 
 /**
  * Read a user's authored settings. Missing document ⇒ the unset view. This runs
@@ -25,12 +30,13 @@ export async function getUserSettings(
   const col = await userSettingsCol();
   const doc = await col.findOne(
     { _id: userId },
-    { projection: { preferredName: 1, instructions: 1 } },
+    { projection: { preferredName: 1, instructions: 1, preferredModelId: 1 } },
   );
   if (!doc) return EMPTY;
   return {
     preferredName: doc.preferredName ?? null,
     instructions: doc.instructions ?? null,
+    preferredModelId: doc.preferredModelId ?? null,
   };
 }
 
@@ -57,12 +63,17 @@ export async function updateUserSettings(
   patch: {
     preferredName?: string | null | undefined;
     instructions?: string | null | undefined;
+    preferredModelId?: string | null | undefined;
   },
   now: Date,
 ): Promise<UserSettingsView> {
   const set: Partial<UserSettings> = { updatedAt: now };
   if ("preferredName" in patch) set.preferredName = normalize(patch.preferredName);
   if ("instructions" in patch) set.instructions = normalize(patch.instructions);
+  // The model id is chosen from the catalog, not freeform, but the same
+  // whitespace-only ⇒ null normalization keeps a blank from ever being stored.
+  if ("preferredModelId" in patch)
+    set.preferredModelId = normalize(patch.preferredModelId);
 
   const col = await userSettingsCol();
   await col.updateOne({ _id: userId }, { $set: set }, { upsert: true });

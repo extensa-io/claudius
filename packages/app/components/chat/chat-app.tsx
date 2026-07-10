@@ -34,6 +34,7 @@ export function ChatApp({
   user,
   initialConversations,
   models,
+  preferredModelId,
   initialConversationId,
   initialMessages,
   initialDocuments,
@@ -44,6 +45,12 @@ export function ChatApp({
   user: SidebarUser;
   initialConversations: ConversationSummary[];
   models: ModelOption[];
+  /**
+   * The user's sticky model choice, seeded server-side from user_settings and
+   * already validated to be a model they may use. New conversations open on it;
+   * null (guests, or no choice yet) falls back to the first allowed model.
+   */
+  preferredModelId: string | null;
   initialConversationId: string | null;
   initialMessages: ClaudiusUIMessage[];
   initialDocuments: DocumentView[];
@@ -77,11 +84,32 @@ export function ChatApp({
     initialConversationId ? null : initialPrompt,
   );
 
+  // A resumed conversation keeps its own last-used model; a fresh start opens on
+  // the sticky preference. Either way, fall back to the first allowed model.
   const activeModelId =
     conversations.find((c) => c.id === initialConversationId)?.modelId ??
+    preferredModelId ??
     models[0]?.id ??
     "";
   const [modelId, setModelId] = useState(activeModelId);
+
+  // Switching the model is the "switch point": update the picker locally and, for
+  // signed-in users, persist the choice so it follows them across sessions and
+  // devices. The write is fire-and-forget — a failed save just means the next new
+  // chat opens on the prior preference, never a blocked or reverted UI. Guests
+  // (no user_settings doc) get local-only switching; the PATCH would 403, so skip.
+  const changeModel = useCallback(
+    (id: string): void => {
+      setModelId(id);
+      if (user.role === "guest") return;
+      void fetch("/api/user-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ preferredModelId: id }),
+      }).catch(() => {});
+    },
+    [user.role],
+  );
 
   const newCounter = useRef(0);
 
@@ -217,7 +245,7 @@ export function ChatApp({
             role={user.role as Role}
             modelId={modelId}
             models={models}
-            onModelChange={setModelId}
+            onModelChange={changeModel}
             onConversationCreated={onConversationCreated}
             onTurnComplete={onTurnComplete}
             onOpenSidebar={() => setSidebarOpen(true)}
