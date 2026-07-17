@@ -77,7 +77,7 @@ export function Composer({
                 submit();
               }
             }}
-            className="block max-h-48 w-full resize-none border-0 bg-transparent p-0 align-top text-sm leading-6 placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+            className="block max-h-48 w-full resize-none border-0 bg-transparent p-0 align-top text-base leading-6 placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 sm:text-sm"
           />
           <div className="mt-2 flex items-center justify-between">
             <div className="flex items-center gap-1">

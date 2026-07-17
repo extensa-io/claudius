@@ -70,7 +70,7 @@ export function MessageList({
         {messages.map((message) =>
           message.role === "user" ? (
             <div key={message.id} className="flex justify-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-secondary-foreground">
+              <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 text-[1.05rem] text-secondary-foreground sm:text-base">
                 {message.parts.map((part, i) =>
                   part.type === "text" ? (
                     <p key={i} className="whitespace-pre-wrap">
@@ -102,7 +102,7 @@ export function MessageList({
                   key={message.id}
                   // min-w-0 so a long unbroken code line scrolls inside its own
                   // block on narrow screens rather than widening the whole column.
-                  className="min-w-0 max-w-none text-[0.95rem] leading-7"
+                  className="min-w-0 max-w-none text-[1.05rem] leading-7 sm:text-[0.95rem]"
                 >
                   {message.metadata?.research && (
                     <ReportControls
