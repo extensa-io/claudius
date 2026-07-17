@@ -128,6 +128,17 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
   created.push("search_cache.expiresAt_ttl");
 
+  // --- dictionary_cache: the Phase 10 dictionary-mode cache -------------
+  // Same shape as search_cache: the cache key IS the _id (a hash of normalized
+  // term + direction), so a lookup is a primary-key hit and needs no extra
+  // index. A TTL on expiresAt reaps each entry on its evergreen lifetime. The
+  // collection holds no user data, so no userId index and no invariant-#1
+  // concern (see DictionaryCacheEntrySchema).
+  await db
+    .collection(COLLECTIONS.dictionaryCache)
+    .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
+  created.push("dictionary_cache.expiresAt_ttl");
+
   // --- vector search indexes --------------------------------------------
   // Created programmatically against Atlas. Every search filters by userId as a
   // pre-filter (invariant: a vector search never returns another user's data),

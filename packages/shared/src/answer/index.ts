@@ -42,3 +42,20 @@ export {
   DEFAULT_ESCALATION_KEYWORDS,
   DEFAULT_CACHE_TTLS,
 } from "./defaults";
+// Phase 10: dictionary mode (`?` define/translate).
+export {
+  parseDefineQuery,
+  detectLanguage,
+  otherLang,
+  buildDictionaryMessages,
+  dictionaryCacheKey,
+  getDefaultDictionaryCacheStore,
+  MemoryDictionaryCacheStore,
+  MongoDictionaryCacheStore,
+  TieredDictionaryCacheStore,
+  DICTIONARY_TTL_SECONDS,
+  type DictLang,
+  type DictionaryValue,
+  type DictionaryCacheStore,
+  type DictionaryPromptMessages,
+} from "./dictionary";

@@ -13,7 +13,7 @@ import { tavilySearch } from "./tavily";
 import type {
   AnswerSearchRequest,
   AnswerSearchResult,
-  Intent,
+  SearchIntent,
   SearchResult,
   SelectionReason,
 } from "./types";
@@ -161,7 +161,13 @@ export async function answerSearch(
   request: AnswerSearchRequest,
   opts: { cache?: CacheStore; cacheTtls?: CacheTtls } = {},
 ): Promise<AnswerSearchResult> {
-  const intent: Intent = request.intent ?? "informational";
+  // A lexical (`?` dictionary) query is served by the dictionary path and never
+  // reaches the engine; if one somehow arrives, treat it as informational so the
+  // search cache's SearchIntent stays honest.
+  const intent: SearchIntent =
+    request.intent && request.intent !== "lexical"
+      ? request.intent
+      : "informational";
   const { cache } = opts;
 
   // Navigational queries never reach the engine in production (the pre-graph

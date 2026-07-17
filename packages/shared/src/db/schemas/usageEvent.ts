@@ -22,6 +22,9 @@ export const UsageEventMetaSchema = z.object({
     "memory_extraction",
     "memory_reclassify",
     "title_gen",
+    // Phase 10: a `?` dictionary define/translate turn. Kept distinct from
+    // `chat` so the admin dashboard can size dictionary spend on its own.
+    "dictionary",
   ]),
 });
 

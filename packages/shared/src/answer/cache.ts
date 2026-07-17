@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { searchCacheCol } from "../db/collections";
 import type { CacheTtls, SearchCacheEntry } from "../db/schemas";
 import { DEFAULT_CACHE_TTLS } from "./defaults";
-import type { Intent, SearchResult, SearchSource } from "./types";
+import type { Intent, SearchIntent, SearchResult, SearchSource } from "./types";
 
 /**
  * The tiered answer-engine cache (Phase 8).
@@ -26,7 +26,7 @@ import type { Intent, SearchResult, SearchSource } from "./types";
 
 export interface CacheKeyParts {
   query: string;
-  intent: Intent;
+  intent: SearchIntent;
   /** Depth signal — a high-value (Tavily advanced) result must not be served to
    * a plain request and vice versa, so it is part of the key. */
   highValue: boolean;
@@ -37,7 +37,7 @@ export interface CacheKeyParts {
 export interface CacheValue {
   results: SearchResult[];
   source: SearchSource;
-  intent: Intent;
+  intent: SearchIntent;
 }
 
 export interface CacheStore {
@@ -78,6 +78,11 @@ export function ttlForIntent(
 ): number {
   switch (intent) {
     case "navigational":
+      return 0;
+    // Phase 10: a lexical (`?` dictionary) query is served by the dictionary
+    // path with its OWN cache and never reaches the search cache, so it has no
+    // TTL here. Return 0 (never cache) defensively.
+    case "lexical":
       return 0;
     case "transactional":
       return ttls.transactionalSeconds;

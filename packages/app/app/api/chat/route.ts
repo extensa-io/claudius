@@ -9,10 +9,12 @@ import {
   getUserSettings,
   isAppError,
   loadSearchSettings,
+  parseDefineQuery,
   writeUsageEvent,
 } from "@claudius/shared";
 import { auth } from "@/lib/auth";
 import { bridgeGraphEvents } from "@/lib/chat/bridge";
+import { handleDictionaryTurn } from "@/lib/chat/dictionary";
 import {
   createConversation,
   getOwnedConversation,
@@ -113,6 +115,25 @@ export const POST = auth(async (req) => {
         },
       });
       return createUIMessageStreamResponse({ stream: redirectStream });
+    }
+
+    // 3.5 Dictionary mode (Phase 10): a leading `?` define/translate lookup
+    //     routes to the dictionary engine instead of the chat graph. It runs its
+    //     OWN gate (on a cache miss) and its own global/content-only cache — a
+    //     cache hit costs no model call and consumes no daily message, a miss is
+    //     a normal gated, logged turn. Uses the same parse primitive the
+    //     classifier's `lexical` intent is built on, so the two never disagree.
+    const defineTerm = parseDefineQuery(text);
+    if (defineTerm !== null) {
+      return await handleDictionaryTurn({
+        userId,
+        role,
+        modelId,
+        term: defineTerm,
+        rawText: text,
+        conversation,
+        signal: req.signal,
+      });
     }
 
     // 4. Enforce tiers: model permission, cost controls, atomic daily cap.

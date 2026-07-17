@@ -30,8 +30,23 @@ export type SearchSource = "brave" | "tavily";
  *   - `informational`: the user wants an ANSWER. The default and common case.
  *   - `transactional`: the user wants to DO something (download, buy, convert).
  *     Returned as results with lighter synthesis and a short cache life.
+ *   - `lexical` (Phase 10): a `?` define/translate lookup. Handled by the
+ *     dictionary path in the chat route, so it never reaches the search engine;
+ *     it appears here only so the classifier stays the single source of intent.
  */
-export type Intent = "navigational" | "informational" | "transactional";
+export type Intent =
+  | "navigational"
+  | "informational"
+  | "transactional"
+  | "lexical";
+
+/**
+ * The intents the SEARCH engine and its cache operate on. `lexical` is served by
+ * the dictionary path (Phase 10) and never reaches the search cache, so it is
+ * excluded here — narrowing it out keeps the search cache's key and value types
+ * honest rather than admitting an intent that can never be stored.
+ */
+export type SearchIntent = Exclude<Intent, "lexical">;
 
 /**
  * A search request into the engine. `query` is the only required field. The

@@ -1,6 +1,7 @@
 import type { Bang, SearchSettings } from "../db/schemas";
 import { hasBang } from "./bangs";
 import { DEFAULT_ESCALATION_KEYWORDS } from "./defaults";
+import { parseDefineQuery } from "./dictionary";
 import type { Intent } from "./types";
 
 /**
@@ -88,6 +89,13 @@ export function classifyIntent(
   opts: { customBangs?: Bang[]; settings?: SearchSettings } = {},
 ): IntentResult {
   const query = raw.trim();
+
+  // (0) Explicit `?` define/translate operator → lexical (Phase 10). Checked
+  //     first: `?` is unambiguous, and the dictionary path short-circuits the
+  //     turn before the search engine ever runs.
+  if (parseDefineQuery(query) !== null) {
+    return { intent: "lexical", reason: "define_operator", highValue: false };
+  }
 
   // (1) Explicit bang → navigational, highest-confidence signal.
   if (hasBang(query)) {

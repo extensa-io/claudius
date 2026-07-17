@@ -19,6 +19,13 @@ function settings(overrides: Partial<SearchSettings> = {}): SearchSettings {
 }
 
 describe("classifyIntent", () => {
+  it("classifies a leading `?` define operator as lexical (Phase 10)", () => {
+    expect(classifyIntent("?ephemeral").intent).toBe("lexical");
+    expect(classifyIntent("?bang for your buck").reason).toBe("define_operator");
+    // A trailing `?` is a normal question, not a define.
+    expect(classifyIntent("what is ephemeral?").intent).toBe("informational");
+  });
+
   it("classifies an explicit bang as navigational", () => {
     expect(classifyIntent("!gh langgraph").intent).toBe("navigational");
     expect(classifyIntent("query !w").reason).toBe("bang");

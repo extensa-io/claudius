@@ -5,6 +5,7 @@ import type {
   Conversation,
   DocumentRecord,
   Job,
+  DictionaryCacheEntry,
   Memory,
   RateLimit,
   SearchCacheEntry,
@@ -37,6 +38,11 @@ export const COLLECTIONS = {
   // userId, no user data — so it is safely shared across users (see
   // SearchCacheEntrySchema). Entries reap on a per-doc TTL.
   searchCache: "search_cache",
+  // Phase 10: the dictionary-mode cache. Also GLOBAL and content-only — no
+  // userId, no user data — so it is safely shared across users (see
+  // DictionaryCacheEntrySchema). Separate from searchCache because the value is
+  // a Markdown entry, not search results. Entries reap on an evergreen TTL.
+  dictionaryCache: "dictionary_cache",
 } as const;
 
 export async function usersCol(): Promise<Collection<User>> {
@@ -81,4 +87,12 @@ export async function jobsCol(): Promise<Collection<Job>> {
 
 export async function searchCacheCol(): Promise<Collection<SearchCacheEntry>> {
   return (await getDb()).collection<SearchCacheEntry>(COLLECTIONS.searchCache);
+}
+
+export async function dictionaryCacheCol(): Promise<
+  Collection<DictionaryCacheEntry>
+> {
+  return (await getDb()).collection<DictionaryCacheEntry>(
+    COLLECTIONS.dictionaryCache,
+  );
 }
