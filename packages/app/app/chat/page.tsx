@@ -72,12 +72,35 @@ export default async function ChatPage({
   // path, so tier enforcement, usage_events, and userId scoping all still apply.
   const initialPrompt = c ? null : sanitizeDeepLinkQuery(q);
 
+  // The sticky model preference is a member/admin feature: guests never get a
+  // user_settings document, so skip the read for them entirely (invariant #4).
+  const [conversations, modelEntries, budgetStatus, userSettings] =
+    await Promise.all([
+      listConversations(userId),
+      getUsableModels(userId),
+      getMonthlyBudgetStatus(userId),
+      session.user.role === "guest" ? null : getUserSettings(userId),
+    ]);
+
+  // Opening /chat with no explicit target — no `?c=` and no `?q=` deep link —
+  // resumes where the user left off instead of dropping them on a blank thread.
+  // We pick the newest non-archived conversation: the same set the sidebar shows,
+  // already sorted updatedAt-desc, so reopening the app returns to the last one
+  // used. With none to resume (a new or fully archived account) we fall through
+  // to the blank new-chat state. The redirected request carries `c`, so a resume
+  // never loops back through this branch.
+  if (!c && !initialPrompt) {
+    const mostRecent = conversations.find((conv) => !conv.archived);
+    if (mostRecent) redirect(`/chat?c=${mostRecent.id}`);
+  }
+
   // Lazy memory extraction (Phase 3, now enqueue-only in Phase 5): after this
   // page responds, ENQUEUE extraction jobs for a few of the user's conversations
   // that have new turns since their last extraction — the worker does the actual
   // model work. `after` runs post-response so it never delays the paint; the
   // daily cron is the backstop. Enqueuing dedupes, so it's a cheap no-op when
-  // everything is already queued or up to date.
+  // everything is already queued or up to date. Registered after the resume
+  // redirect so it's scheduled once, on the request that actually renders.
   after(async () => {
     try {
       await enqueueUserMemories(userId);
@@ -89,15 +112,6 @@ export default async function ChatPage({
     }
   });
 
-  // The sticky model preference is a member/admin feature: guests never get a
-  // user_settings document, so skip the read for them entirely (invariant #4).
-  const [conversations, modelEntries, budgetStatus, userSettings] =
-    await Promise.all([
-      listConversations(userId),
-      getUsableModels(userId),
-      getMonthlyBudgetStatus(userId),
-      session.user.role === "guest" ? null : getUserSettings(userId),
-    ]);
   const models = modelEntries.map((m) => ({
     id: m.id,
     displayName: m.displayName,

@@ -11,7 +11,7 @@ import { useState } from "react";
 // client bundle. The Zod schema at the API boundary is the real enforcement;
 // these just drive the input maxLength and counter. Keep in sync with the schema.
 const USER_PREFERRED_NAME_MAX = 100;
-const USER_INSTRUCTIONS_MAX = 4000;
+const USER_INSTRUCTIONS_MAX = 8000;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { zObjectId } from "./common";
 
 /** Cap the freeform instructions so one user can't bloat every prompt. */
-export const USER_INSTRUCTIONS_MAX = 4000;
+export const USER_INSTRUCTIONS_MAX = 8000;
 /** A display name, not an essay — kept short so it reads as an address. */
 export const USER_PREFERRED_NAME_MAX = 100;
 
