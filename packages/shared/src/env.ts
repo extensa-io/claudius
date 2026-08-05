@@ -52,6 +52,14 @@ const EnvSchema = z.object({
   // (the documented path for readers on Atlas M0, which has no change streams).
   JOB_CONSUME_MODE: z.enum(["changestream", "poll"]).optional(),
 
+  // --- Optional in both: GitHub read_url auth (Phase 11) ----------------
+  // read_url's GitHub path calls the public REST API unauthenticated by default.
+  // A token is NOT required — it only raises the rate limit — so it's optional in
+  // the base schema and simply absent when unset. Only the app's read_url tool
+  // reads it, but it lives in the shared base so a deployment that DOES set it is
+  // validated at boot in both runtimes.
+  GITHUB_TOKEN: z.string().min(1).optional(),
+
   // --- Optional in both: LangSmith tracing ------------------------------
   // LangChain JS auto-instruments from these process.env vars when
   // LANGSMITH_TRACING is "true" and an API key is present; absent, tracing is

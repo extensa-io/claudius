@@ -22,7 +22,7 @@ import {
   SYSTEM_PROMPT,
   userSettingsNote,
 } from "./prompts";
-import { baseTools, documentTools, tools } from "./tools";
+import { selectBoundTools, tools } from "./tools";
 
 /**
  * The chat graph's state: the message channel, plus an ephemeral `memoryContext`
@@ -86,6 +86,13 @@ export interface ChatGraphConfigurable {
    */
   preferredName?: string | null;
   customInstructions?: string | null;
+  /**
+   * Whether this turn may use the read_url tool (Phase 11). The route sets it
+   * true for members and admins and leaves it absent for guests, so URL fetching
+   * is bound only for authorized roles — the same session-derived gating as the
+   * member-only settings above (invariant #2). No client input decides this.
+   */
+  canReadUrls?: boolean;
 }
 
 function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
@@ -188,14 +195,17 @@ async function agent(
     attachedDocumentNames,
     preferredName,
     customInstructions,
+    canReadUrls,
   } = readConfigurable(config);
   // Offer retrieve_documents only when this conversation actually has embedded
-  // documents, so the model never reaches for document search on a plain chat.
+  // documents, so the model never reaches for document search on a plain chat;
+  // offer read_url only when the role allows it (members/admins, never guests).
   const hasDocuments =
     attachedDocumentIds !== undefined && attachedDocumentIds.length > 0;
-  const boundTools = hasDocuments
-    ? [...baseTools, ...documentTools]
-    : baseTools;
+  const boundTools = selectBoundTools({
+    hasDocuments,
+    canReadUrls: canReadUrls ?? false,
+  });
   // Build the system prompt fresh each turn from parts, none persisted: the
   // current date (so the model is grounded in the present, not its training
   // cutoff), the base identity, the user's authored settings (if any), the

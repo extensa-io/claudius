@@ -208,6 +208,10 @@ export const POST = auth(async (req) => {
               memoryEnabled: grant.memoryEnabled,
               preferredName: userSettings.preferredName,
               customInstructions: userSettings.instructions,
+              // read_url is a member/admin capability (Phase 11): the flag is
+              // set from the session-derived role, never from client input, so a
+              // guest turn never gets the tool bound (invariant #2).
+              canReadUrls: role !== "guest",
             },
             signal: req.signal,
           },

@@ -3,6 +3,8 @@ import {
   MEMORIES_USED_EVENT,
   SEARCH_SOURCE_EVENT,
   type SearchSourceEvent,
+  URL_READ_EVENT,
+  type UrlReadEvent,
 } from "@claudius/shared";
 import type { ClaudiusStreamWriter, UsedMemory } from "./types";
 
@@ -51,6 +53,9 @@ interface GraphStreamEvent {
     source?: unknown;
     query?: unknown;
     resultCount?: unknown;
+    url?: unknown;
+    kind?: unknown;
+    ok?: unknown;
   };
 }
 
@@ -78,6 +83,15 @@ function asSearchSource(
     query: typeof query === "string" ? query : "",
     resultCount: typeof resultCount === "number" ? resultCount : 0,
   };
+}
+
+/** Validate a url_read payload before trusting it on the wire. */
+function asUrlRead(data: GraphStreamEvent["data"]): UrlReadEvent | null {
+  if (!data) return null;
+  const { url, kind, ok } = data;
+  if (typeof url !== "string") return null;
+  if (kind !== "github" && kind !== "web") return null;
+  return { url, kind, ok: ok === true };
 }
 
 function addUsage(totals: UsageTotals, usage: UsageMetadata | undefined): void {
@@ -120,6 +134,8 @@ export async function bridgeGraphEvents(
   // A turn can run several web searches; each gets its own data-search part with
   // a distinct id so they don't coalesce into one on the client.
   let searchSegment = 0;
+  // Likewise a turn can read several URLs; each url_read gets its own data-url id.
+  let urlSegment = 0;
 
   const endText = (): void => {
     if (textId !== null) {
@@ -206,6 +222,18 @@ export async function bridgeGraphEvents(
               type: "data-search",
               id: `search-${searchSegment++}`,
               data: search,
+            });
+          }
+        } else if (ev.name === URL_READ_EVENT) {
+          // Which path (GitHub/web) served a read_url this turn, and whether it
+          // succeeded. Non-transient, one part per read, so each shows its own
+          // icon and survives reload.
+          const read = asUrlRead(ev.data);
+          if (read) {
+            writer.write({
+              type: "data-url",
+              id: `url-${urlSegment++}`,
+              data: read,
             });
           }
         }

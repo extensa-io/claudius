@@ -1,9 +1,17 @@
 "use client";
 
 import type { DynamicToolUIPart } from "ai";
-import { ChevronDown, FileText, Globe, Loader2 } from "lucide-react";
+import {
+  ChevronDown,
+  FileText,
+  GitBranch,
+  Globe,
+  Link as LinkIcon,
+  Loader2,
+} from "lucide-react";
 import { useState } from "react";
 import type {
+  ReadUrlToolOutput,
   RetrieveToolOutput,
   WebSearchToolOutput,
 } from "@/lib/chat/view-types";
@@ -20,6 +28,7 @@ import { cn } from "@/lib/utils";
 export function ToolActivity({
   part,
   suppressCompletedWebSearch = false,
+  suppressCompletedUrlRead = false,
 }: {
   part: DynamicToolUIPart;
   /**
@@ -29,9 +38,16 @@ export function ToolActivity({
    * The live "Searching…" indicator always shows regardless.
    */
   suppressCompletedWebSearch?: boolean;
+  /** Same idea for read_url: a `data-url` icon replaces the settled card. */
+  suppressCompletedUrlRead?: boolean;
 }): React.ReactNode {
   if (part.toolName === "retrieve_documents") {
     return <RetrieveActivity part={part} />;
+  }
+  if (part.toolName === "read_url") {
+    return (
+      <ReadUrlActivity part={part} suppressCompleted={suppressCompletedUrlRead} />
+    );
   }
   return (
     <WebSearchActivity
@@ -133,6 +149,99 @@ function WebSearchActivity({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function urlOf(part: DynamicToolUIPart): string {
+  return typeof part.input === "object" && part.input !== null
+    ? String((part.input as { url?: unknown }).url ?? "")
+    : "";
+}
+
+function isReadUrlOutput(value: unknown): value is ReadUrlToolOutput {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { url?: unknown }).url === "string"
+  );
+}
+
+/**
+ * read_url activity (Phase 11): a live "Reading …" indicator while the fetch
+ * runs, then a settled card linking the page (or, on a new turn, nothing — the
+ * `data-url` chip in the strip is the resting form). GitHub reads show the repo
+ * mark; generic reads show a link icon.
+ */
+function ReadUrlActivity({
+  part,
+  suppressCompleted = false,
+}: {
+  part: DynamicToolUIPart;
+  suppressCompleted?: boolean;
+}): React.ReactNode {
+  const url = urlOf(part);
+
+  if (part.state === "input-streaming" || part.state === "input-available") {
+    return (
+      <div className="my-2 flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-3.5 animate-spin" />
+        <span>
+          Reading{url ? ` ${url}` : " the page"}
+          <span className="ml-0.5 animate-pulse">…</span>
+        </span>
+      </div>
+    );
+  }
+
+  if (part.state === "output-error") {
+    return (
+      <div className="my-2 flex items-center gap-2 text-sm text-destructive">
+        <LinkIcon className="size-3.5" />
+        Unable to read that URL.
+      </div>
+    );
+  }
+
+  if (part.state !== "output-available") return null;
+  if (suppressCompleted) return null;
+
+  const output = isReadUrlOutput(part.output) ? part.output : null;
+  const isGithub = output?.kind === "github";
+  const href = output?.url ?? url;
+  const label = output?.title || href;
+
+  if (output?.error) {
+    return (
+      <div className="my-2 flex items-center gap-2 text-sm text-muted-foreground">
+        {isGithub ? (
+          <GitBranch className="size-3.5 shrink-0" />
+        ) : (
+          <LinkIcon className="size-3.5 shrink-0" />
+        )}
+        <span>{output.error}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-2 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+      {isGithub ? (
+        <GitBranch className="size-3.5 shrink-0" />
+      ) : (
+        <LinkIcon className="size-3.5 shrink-0" />
+      )}
+      <span className="flex-1">
+        Read{" "}
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-primary hover:underline"
+        >
+          {label}
+        </a>
+      </span>
     </div>
   );
 }

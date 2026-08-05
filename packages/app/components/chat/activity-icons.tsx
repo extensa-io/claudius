@@ -1,8 +1,11 @@
 "use client";
 
-import { Globe } from "lucide-react";
+import { GitBranch, Globe, Link as LinkIcon } from "lucide-react";
 import { useState } from "react";
-import type { SearchActivityDataPart } from "@/lib/chat/types";
+import type {
+  SearchActivityDataPart,
+  UrlReadActivityDataPart,
+} from "@/lib/chat/types";
 import { cn } from "@/lib/utils";
 
 /**
@@ -84,6 +87,58 @@ export function SearchActivityChip({
       <IconChip
         icon={<Globe className="size-3.5" />}
         label={search.source}
+        summary={summary}
+        open={open}
+        onToggle={() => setOpen((v) => !v)}
+      />
+      {open && (
+        <p className="mt-1 pl-1 text-xs text-muted-foreground">{summary}</p>
+      )}
+    </div>
+  );
+}
+
+/** Shorten a URL to "host + first path segment" for a compact chip label. */
+function shortUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.replace(/^www\./, "");
+    const seg = u.pathname.split("/").filter(Boolean)[0];
+    return seg ? `${host}/${seg}` : host;
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * The read_url activity icon (Phase 11): a GitHub mark for a repo read, a link
+ * icon for a generic page. Hover shows the URL and outcome; clicking expands the
+ * line. The fetched content stays in the live tool-activity card while the read
+ * runs — this chip is the settled, resting representation.
+ */
+export function UrlReadActivityChip({
+  read,
+}: {
+  read: UrlReadActivityDataPart;
+}): React.ReactNode {
+  const [open, setOpen] = useState(false);
+  const label = shortUrl(read.url);
+  const verb = read.kind === "github" ? "Read the repository" : "Read the page";
+  const summary = read.ok
+    ? `${verb} ${read.url}`
+    : `Couldn't read ${read.url}`;
+
+  return (
+    <div className="inline-block">
+      <IconChip
+        icon={
+          read.kind === "github" ? (
+            <GitBranch className="size-3.5" />
+          ) : (
+            <LinkIcon className="size-3.5" />
+          )
+        }
+        label={label}
         summary={summary}
         open={open}
         onToggle={() => setOpen((v) => !v)}

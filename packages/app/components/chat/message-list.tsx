@@ -5,9 +5,10 @@ import { useEffect, useRef } from "react";
 import type {
   ClaudiusUIMessage,
   SearchActivityDataPart,
+  UrlReadActivityDataPart,
   UsedMemory,
 } from "@/lib/chat/types";
-import { SearchActivityChip } from "./activity-icons";
+import { SearchActivityChip, UrlReadActivityChip } from "./activity-icons";
 import { Markdown } from "./markdown";
 import { MemoryUsedChip } from "./memory-used-chip";
 import { ReportControls } from "./report-controls";
@@ -94,8 +95,14 @@ export function MessageList({
                 (p): p is { type: "data-search"; data: SearchActivityDataPart } =>
                   p.type === "data-search",
               );
+              const urlReads = message.parts.filter(
+                (p): p is { type: "data-url"; data: UrlReadActivityDataPart } =>
+                  p.type === "data-url",
+              );
               const hasSearchIcons = searches.length > 0;
-              const hasActivity = Boolean(usedMemories) || hasSearchIcons;
+              const hasUrlIcons = urlReads.length > 0;
+              const hasActivity =
+                Boolean(usedMemories) || hasSearchIcons || hasUrlIcons;
 
               return (
                 <div
@@ -122,6 +129,7 @@ export function MessageList({
                           key={i}
                           part={part as DynamicToolUIPart}
                           suppressCompletedWebSearch={hasSearchIcons}
+                          suppressCompletedUrlRead={hasUrlIcons}
                         />
                       );
                     }
@@ -135,6 +143,9 @@ export function MessageList({
                       )}
                       {searches.map((s, i) => (
                         <SearchActivityChip key={i} search={s.data} />
+                      ))}
+                      {urlReads.map((u, i) => (
+                        <UrlReadActivityChip key={i} read={u.data} />
                       ))}
                     </div>
                   )}

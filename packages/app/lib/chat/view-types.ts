@@ -43,3 +43,12 @@ export interface RetrieveToolOutput {
 export interface WebSearchToolOutput {
   results: Array<{ title: string; url: string; snippet: string }>;
 }
+
+/** The shape read_url returns, parsed on the client for the "read a page" card. */
+export interface ReadUrlToolOutput {
+  url: string;
+  kind: "github" | "web";
+  title?: string;
+  content?: string;
+  error?: string;
+}

@@ -47,6 +47,20 @@ export interface SearchActivityDataPart {
 }
 
 /**
+ * Emitted once per URL read (via the graph's `url_read` custom event, Phase 11),
+ * carrying which path served the read (a GitHub repo vs a generic page) and
+ * whether it succeeded, so the transcript can show a "read a page" icon. Written
+ * NON-transient so it sticks to the assistant message and renders in the activity
+ * strip on reload. Like the search icon it arrives out-of-band from the tool
+ * output, so the model never learns which path ran.
+ */
+export interface UrlReadActivityDataPart {
+  url: string;
+  kind: "github" | "web";
+  ok: boolean;
+}
+
+/**
  * Emitted by the pre-graph interceptor (Phase 8) when a bang or a navigational
  * query resolves to a URL. The client opens it in a NEW tab (window.open), so the
  * conversation stays in place — mirroring the `data-conversation` precedent.
@@ -78,6 +92,7 @@ export type ClaudiusUIMessage = UIMessage<
     conversation: ConversationDataPart;
     memories: MemoriesDataPart;
     search: SearchActivityDataPart;
+    url: UrlReadActivityDataPart;
     redirect: RedirectDataPart;
   }
 >;

@@ -1,12 +1,17 @@
 import { tavily } from "@tavily/core";
-import { env } from "@claudius/shared";
+import { env, extractPages as sharedExtractPages } from "@claudius/shared";
 
 /**
  * Tavily access for the research worker: search (find candidate sources) and
  * extract (fetch and read the full text of a chosen page). The chat agent's
  * web_search tool (in shared) is a shallow one-shot; deep research needs the
  * two-step "find, then read" shape and deeper search, so the worker talks to
- * Tavily directly rather than through the bound tool.
+ * Tavily's SEARCH directly rather than through the bound tool.
+ *
+ * Extraction is NOT duplicated here: as of Phase 11 the single Tavily-extract
+ * implementation lives in `@claudius/shared` (read_url needs it on the request
+ * path too), and `extractPages` below is a thin re-export so both runtimes share
+ * one fetch/read behavior and one truncation budget.
  */
 
 let client: ReturnType<typeof tavily> | null = null;
@@ -37,33 +42,16 @@ export async function searchWeb(
   }));
 }
 
-export interface PageContent {
-  url: string;
-  /** The extracted full text, truncated to keep synthesis within token budget. */
-  text: string;
-}
-
-// Per-page character cap so one long page can't blow the synthesis token budget.
-const MAX_PAGE_CHARS = 12_000;
+/**
+ * A fetched page's readable text. Re-exported from shared (Phase 11): the
+ * research synthesis reads `url` and `text`; shared also carries a `title` the
+ * worker ignores, which is structurally compatible.
+ */
+export type PageContent = { url: string; text: string };
 
 /**
- * Fetch and extract the readable text of one or more pages. Tavily returns a
- * `rawContent` string per successful URL; failures are dropped silently (a dead
- * link should never fail the whole job). The client's field naming has varied
- * across versions, so we read both camel and snake case defensively.
+ * Fetch and extract the readable text of one or more pages, via the single
+ * shared Tavily-extract implementation. Failures are dropped silently there (a
+ * dead link should never fail the whole job).
  */
-export async function extractPages(urls: string[]): Promise<PageContent[]> {
-  if (urls.length === 0) return [];
-  const response = await getClient().extract(urls, {});
-  const results = (response.results ?? []) as Array<{
-    url: string;
-    rawContent?: string;
-    raw_content?: string;
-  }>;
-  return results
-    .map((r) => ({
-      url: r.url,
-      text: (r.rawContent ?? r.raw_content ?? "").slice(0, MAX_PAGE_CHARS),
-    }))
-    .filter((p) => p.text.length > 0);
-}
+export const extractPages = sharedExtractPages;
