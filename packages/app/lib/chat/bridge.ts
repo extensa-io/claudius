@@ -32,6 +32,21 @@ export interface BridgeResult {
   assistantText: string;
 }
 
+/**
+ * A live view of the turn as it is being bridged. The caller owns the object and
+ * the bridge mutates it on every delta, so a run that is aborted or errors
+ * mid-stream still leaves the caller holding whatever text and token counts had
+ * arrived. Without it, an interrupted turn's output is unrecoverable: LangGraph
+ * only commits the assistant message when the agent node returns, so a turn that
+ * dies mid-run streams to the browser and persists nothing.
+ */
+export function createTurnProgress(): BridgeResult {
+  return {
+    usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 },
+    assistantText: "",
+  };
+}
+
 /** The subset of LangChain's usage_metadata we record. */
 interface UsageMetadata {
   input_tokens?: number;
@@ -119,13 +134,11 @@ function parseToolOutput(output: unknown): unknown {
 export async function bridgeGraphEvents(
   events: AsyncIterable<GraphStreamEvent>,
   writer: ClaudiusStreamWriter,
+  /** Optional caller-owned progress object, mutated as the turn streams so an
+   * interrupted run is still recoverable. Defaults to a fresh one. */
+  progress: BridgeResult = createTurnProgress(),
 ): Promise<BridgeResult> {
-  const totals: UsageTotals = {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-  };
-  let assistantText = "";
+  const totals = progress.usage;
 
   // A turn can produce several text segments (e.g. a sentence, a tool call, then
   // more text). Each segment is its own text part with a stable id.
@@ -155,7 +168,7 @@ export async function bridgeGraphEvents(
             writer.write({ type: "text-start", id: textId });
           }
           writer.write({ type: "text-delta", id: textId, delta });
-          assistantText += delta;
+          progress.assistantText += delta;
         }
         break;
       }
@@ -244,5 +257,5 @@ export async function bridgeGraphEvents(
 
   // Defensive: close a dangling text segment if the stream ended mid-text.
   endText();
-  return { usage: totals, assistantText };
+  return progress;
 }

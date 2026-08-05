@@ -13,13 +13,14 @@ import {
   writeUsageEvent,
 } from "@claudius/shared";
 import { auth } from "@/lib/auth";
-import { bridgeGraphEvents } from "@/lib/chat/bridge";
+import { bridgeGraphEvents, createTurnProgress } from "@/lib/chat/bridge";
 import { handleDictionaryTurn } from "@/lib/chat/dictionary";
 import {
   createConversation,
   getOwnedConversation,
   touchConversation,
 } from "@/lib/chat/conversations";
+import { appendPartialAssistantTurn } from "@/lib/chat/partial";
 import { appendRedirectToThread } from "@/lib/chat/redirect";
 import { resolveRedirect } from "@/lib/chat/routing";
 import {
@@ -31,10 +32,17 @@ import { type ClaudiusUIMessage, ChatRequestSchema } from "@/lib/chat/types";
 import { errorResponse } from "@/lib/http";
 import { enforceRateLimit } from "@/lib/ratelimit";
 
-// LangGraph and the Mongo driver need the Node runtime, not edge. maxDuration is
-// raised so a streamed multi-step turn (model -> tool -> model) has room to run.
+// LangGraph and the Mongo driver need the Node runtime, not edge.
+//
+// maxDuration matters more here than anywhere else in the app. Nothing about a
+// turn is durable until the run completes: the checkpointer commits the assistant
+// message when the agent node returns, and the usage row, the preview and the
+// title are all written after that. A turn killed by the platform therefore
+// streams a full reply to the browser and persists NOTHING — the thread reloads
+// as an unanswered question. At 60s that was reachable in normal use (a long
+// explanation, or a tool loop with several searches), so this is the Pro ceiling.
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * The chat turn. Validates input, resolves (or creates) the conversation,
@@ -148,6 +156,20 @@ export const POST = auth(async (req) => {
     const threadId = conversationObjId.toString();
     const conversationTitle = conversation.title;
 
+    // Title the conversation as soon as its row exists, from the user's opening
+    // message. Deliberately NOT at the end of the turn: only a new conversation
+    // is ever titled, so a first turn that dies mid-run used to leave the thread
+    // on "New chat" permanently.
+    if (isNewConversation) {
+      after(() =>
+        generateTitle({
+          userId,
+          conversationId: conversationObjId,
+          userText: text,
+        }),
+      );
+    }
+
     // Associate any documents uploaded before this conversation existed (only
     // the user's own, still-pending ones — see associatePendingDocuments), then
     // resolve the conversation's embedded documents to scope retrieval. The
@@ -217,44 +239,52 @@ export const POST = auth(async (req) => {
           },
         );
 
+        // The bridge mutates `progress` as tokens arrive, so if the run throws
+        // (client abort, a model error after streaming) we still hold the text
+        // and token counts the user actually saw.
+        const progress = createTurnProgress();
         const startedAt = Date.now();
-        const { usage, assistantText } = await bridgeGraphEvents(events, writer);
-        const latencyMs = Date.now() - startedAt;
+
+        // Exactly one usage_events row per chat turn, summed across model calls
+        // (a tool loop invokes the model more than once). Invariant #3. Written
+        // for an interrupted turn too — the tokens were spent either way.
+        const recordTurn = async (interrupted: boolean): Promise<void> => {
+          const { usage, assistantText } = progress;
+          await writeUsageEvent({
+            userId,
+            conversationId: conversationObjId,
+            modelId: grant.modelId,
+            purpose: "chat",
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cacheReadTokens: usage.cacheReadTokens,
+            latencyMs: Date.now() - startedAt,
+          });
+
+          // On a completed run the graph has already committed the assistant
+          // message; on an interrupted one it never will, so append what streamed.
+          if (interrupted) {
+            await appendPartialAssistantTurn(threadId, assistantText);
+          }
+
+          await touchConversation({
+            userId,
+            conversationId: conversationObjId,
+            preview: assistantText || text,
+            modelId: grant.modelId,
+          });
+        };
+
+        try {
+          await bridgeGraphEvents(events, writer, progress);
+        } catch (err) {
+          await recordTurn(true);
+          throw err;
+        }
+        await recordTurn(false);
 
         writer.write({ type: "finish-step" });
         writer.write({ type: "finish" });
-
-        // Exactly one usage_events row per chat turn, summed across model calls
-        // (a tool loop invokes the model more than once). Invariant #3.
-        await writeUsageEvent({
-          userId,
-          conversationId: conversationObjId,
-          modelId: grant.modelId,
-          purpose: "chat",
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          cacheReadTokens: usage.cacheReadTokens,
-          latencyMs,
-        });
-
-        await touchConversation({
-          userId,
-          conversationId: conversationObjId,
-          preview: assistantText || text,
-          modelId: grant.modelId,
-        });
-
-        // First exchange done: generate a title after the response flushes.
-        if (isNewConversation) {
-          after(() =>
-            generateTitle({
-              userId,
-              conversationId: conversationObjId,
-              userText: text,
-              assistantText,
-            }),
-          );
-        }
       },
     });
 

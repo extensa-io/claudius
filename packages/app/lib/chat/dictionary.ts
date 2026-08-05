@@ -110,6 +110,19 @@ export async function handleDictionaryTurn(params: {
   const conversationObjId = conversation._id!;
   const threadId = conversationObjId.toString();
 
+  // Title from the opening lookup, before the turn runs: only a new conversation
+  // is ever titled, so waiting for the turn to finish means a failed first turn
+  // leaves the thread on "New chat" for good.
+  if (isNewConversation) {
+    after(() =>
+      generateTitle({
+        userId,
+        conversationId: conversationObjId,
+        userText: rawText,
+      }),
+    );
+  }
+
   const stream = createUIMessageStream<ClaudiusUIMessage>({
     onError: (error) => {
       console.error(
@@ -200,16 +213,6 @@ export async function handleDictionaryTurn(params: {
           preview: entry,
           modelId: grant?.modelId ?? modelId,
         });
-        if (isNewConversation) {
-          after(() =>
-            generateTitle({
-              userId,
-              conversationId: conversationObjId,
-              userText: rawText,
-              assistantText: entry,
-            }),
-          );
-        }
       }
     },
   });
