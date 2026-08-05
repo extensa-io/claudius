@@ -63,7 +63,9 @@ describe("withHydratedImages", () => {
     expect(Array.isArray(content)).toBe(true);
     expect(content[0]).toMatchObject({
       type: "image",
-      source: { type: "base64", media_type: "image/jpeg", data: BASE64 },
+      source_type: "base64",
+      mime_type: "image/jpeg",
+      data: BASE64,
     });
     expect(content[1]).toMatchObject({
       type: "text",

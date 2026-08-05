@@ -161,7 +161,7 @@ export function classifyDocument(filename: string): DocumentKind | null {
 
 /**
  * The MIME type to upload a file as, derived from its extension. Images must
- * carry their true type: it becomes the `media_type` on the content block sent
+ * carry their true type: it becomes the `mime_type` on the content block sent
  * to Bedrock, and it is what the Blob-token allowlist checks. Everything else
  * keeps the pre-Phase-12 behaviour of declaring the coarse type the parser
  * expects, since the parser dispatches on extension regardless and text/code is

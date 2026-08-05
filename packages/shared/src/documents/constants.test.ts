@@ -41,7 +41,7 @@ describe("classifyDocument", () => {
 
 describe("uploadContentTypeFor", () => {
   it("sends the real MIME type for images", () => {
-    // This is what becomes media_type on the content block, and what the
+    // This is what becomes mime_type on the content block, and what the
     // Blob-token allowlist checks — it can no longer be flattened to text/plain.
     expect(uploadContentTypeFor("a.jpg")).toBe("image/jpeg");
     expect(uploadContentTypeFor("a.jpeg")).toBe("image/jpeg");

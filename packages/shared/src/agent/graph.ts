@@ -315,13 +315,15 @@ export async function withHydratedImages(
   const text = original.text;
   const multimodal = new HumanMessage({
     content: [
+      // LangChain's standard data content block, not the Anthropic-native
+      // `{ source: { type, media_type } }` shape. ChatBedrockConverse only
+      // recognises the standard form (source_type/mime_type) and throws
+      // "Unsupported content block type: image" on the Anthropic one.
       ...hydrated.map((image) => ({
         type: "image" as const,
-        source: {
-          type: "base64" as const,
-          media_type: image.mimeType,
-          data: image.base64,
-        },
+        source_type: "base64" as const,
+        mime_type: image.mimeType,
+        data: image.base64,
       })),
       // Text last: with the images already in view, the question reads as being
       // about them. An image-only turn contributes no text block at all rather
