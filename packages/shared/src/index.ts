@@ -24,6 +24,7 @@ export {
   MAX_DOCUMENT_BYTES,
   MAX_CHUNKS_PER_DOCUMENT,
   ALLOWED_UPLOAD_CONTENT_TYPES,
+  UPLOAD_ACCEPT_ATTRIBUTE,
   classifyDocument,
   type DocumentKind,
 } from "./documents/constants";

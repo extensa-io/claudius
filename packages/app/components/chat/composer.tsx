@@ -1,5 +1,9 @@
 "use client";
 
+// Deep import, not the package barrel: this is a client component, and the
+// barrel re-exports the env schema and the Mongo client. `documents/constants`
+// is dependency-free and safe to ship to the browser.
+import { UPLOAD_ACCEPT_ATTRIBUTE } from "@claudius/shared/documents/constants";
 import { ArrowUp, Paperclip, Square, Telescope } from "lucide-react";
 import { useRef, useState } from "react";
 import { DocumentChips } from "./document-chips";
@@ -87,6 +91,7 @@ export function Composer({
                     ref={fileInputRef}
                     type="file"
                     multiple
+                    accept={UPLOAD_ACCEPT_ATTRIBUTE}
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files?.length) onUploadFiles(e.target.files);

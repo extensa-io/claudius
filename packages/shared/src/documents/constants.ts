@@ -82,6 +82,17 @@ const TEXT_EXTENSIONS = new Set([
   "r",
 ]);
 
+/**
+ * Every extension `classifyDocument` accepts, as a comma-separated `accept`
+ * attribute for a file input. Derived from the same sets the classifier uses so
+ * the picker and the server cannot drift: adding an extension above is enough to
+ * make it selectable. This is a UX filter only (an `accept` attribute is
+ * trivially bypassed), so it complements rather than replaces the server gate.
+ */
+export const UPLOAD_ACCEPT_ATTRIBUTE = ["pdf", "docx", ...TEXT_EXTENSIONS]
+  .map((ext) => `.${ext}`)
+  .join(",");
+
 function extensionOf(filename: string): string {
   const dot = filename.lastIndexOf(".");
   return dot === -1 ? "" : filename.slice(dot + 1).toLowerCase();

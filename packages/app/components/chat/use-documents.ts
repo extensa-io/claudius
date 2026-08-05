@@ -1,6 +1,8 @@
 "use client";
 
 import { upload } from "@vercel/blob/client";
+// Deep import (see composer.tsx): the barrel is not client-safe.
+import { classifyDocument } from "@claudius/shared/documents/constants";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DocumentView } from "@/lib/chat/view-types";
 
@@ -43,6 +45,13 @@ function contentTypeFor(filename: string): string {
     return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   }
   return "text/plain";
+}
+
+/** ".JPG" → "JPG files", for a rejection message that names what was picked. */
+function extensionLabel(filename: string): string | null {
+  const dot = filename.lastIndexOf(".");
+  if (dot === -1 || dot === filename.length - 1) return null;
+  return `${filename.slice(dot + 1).toUpperCase()} files`;
 }
 
 function toChip(doc: DocumentView): DocChip {
@@ -141,6 +150,20 @@ export function useDocuments({
         ...prev,
         { id: tmpId, filename: file.name, status: "uploading", percentage: 0 },
       ]);
+
+      // Reject unsupported types *before* spending an upload on them. Without
+      // this the bytes land in Blob, the create-record call rejects the
+      // extension, and the user watches a progress bar reach 100% only to fail —
+      // leaving an orphaned blob with no record to retry or clean up against.
+      if (classifyDocument(file.name) === null) {
+        patch(tmpId, {
+          status: "failed",
+          failureReason: `${
+            extensionLabel(file.name) ?? "This file type"
+          } isn't supported. Attach a PDF, Word document, or text/code file.`,
+        });
+        return;
+      }
 
       try {
         const blob = await upload(file.name, file, {
