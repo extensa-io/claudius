@@ -6,6 +6,7 @@ import {
   getUsableModels,
   getUserSettings,
   loadThreadMessages,
+  loadTier,
 } from "@claudius/shared";
 import { ChatApp, type BudgetInfo } from "@/components/chat/chat-app";
 import { auth } from "@/lib/auth";
@@ -115,7 +116,13 @@ export default async function ChatPage({
   const models = modelEntries.map((m) => ({
     id: m.id,
     displayName: m.displayName,
+    supportsImages: m.supportsImages ?? false,
   }));
+
+  // The role's image policy (Phase 12). Absent means the role gets no image
+  // service at all, which is how the guest tier is configured off rather than
+  // special-cased — so guests simply get null here and no attach affordance.
+  const imagePolicy = (await loadTier(session.user.role)).images ?? null;
 
   // Seed new conversations from the remembered choice, but only if it's still a
   // model the user may use (a role or catalog change can strip access). Null
@@ -173,6 +180,7 @@ export default async function ChatPage({
       initialDocuments={initialDocuments}
       initialJobs={initialJobs}
       budget={budget}
+      imagePolicy={imagePolicy}
       initialPrompt={initialPrompt}
     />
   );

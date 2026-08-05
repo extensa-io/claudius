@@ -10,6 +10,7 @@ import {
   isAppError,
   loadSearchSettings,
   parseDefineQuery,
+  resolveTurnImages,
   writeUsageEvent,
 } from "@claudius/shared";
 import { auth } from "@/lib/auth";
@@ -23,6 +24,7 @@ import {
 import { appendPartialAssistantTurn } from "@/lib/chat/partial";
 import { appendRedirectToThread } from "@/lib/chat/redirect";
 import { resolveRedirect } from "@/lib/chat/routing";
+import { assertImagesAllowed, attachedImagesTurnText } from "@/lib/chat/vision";
 import {
   associatePendingDocuments,
   getRetrievableDocuments,
@@ -72,6 +74,12 @@ export const POST = auth(async (req) => {
     );
   }
   const { conversationId, modelId, text, documentIds } = parsed.data;
+  const imageIds = parsed.data.imageIds ?? [];
+
+  // An empty turn is not a turn. Text may be empty ONLY when images carry it.
+  if (text.trim().length === 0 && imageIds.length === 0) {
+    return errorResponse(new AppError("invalid_input", "Message is empty."));
+  }
 
   try {
     // 1. Verify ownership of an existing conversation BEFORE consuming anything,
@@ -100,8 +108,13 @@ export const POST = auth(async (req) => {
     //     the first message of a fresh chat does NOT create a conversation
     //     (mirrors how a tripped cap leaves no empty row) — the client shows an
     //     ephemeral note and opens the tab.
+    //     An image-bearing turn skips the router and the dictionary outright: a
+    //     turn with a picture attached is a question ABOUT the picture, so
+    //     redirecting it to a search engine or a definition lookup would throw
+    //     the attachment away and answer something the user did not ask.
     const searchSettings = await loadSearchSettings();
-    const redirect = resolveRedirect(text, searchSettings);
+    const redirect =
+      imageIds.length > 0 ? null : resolveRedirect(text, searchSettings);
     if (redirect) {
       if (conversation) {
         await appendRedirectToThread(
@@ -131,7 +144,7 @@ export const POST = auth(async (req) => {
     //     cache hit costs no model call and consumes no daily message, a miss is
     //     a normal gated, logged turn. Uses the same parse primitive the
     //     classifier's `lexical` intent is built on, so the two never disagree.
-    const defineTerm = parseDefineQuery(text);
+    const defineTerm = imageIds.length > 0 ? null : parseDefineQuery(text);
     if (defineTerm !== null) {
       return await handleDictionaryTurn({
         userId,
@@ -146,6 +159,16 @@ export const POST = auth(async (req) => {
 
     // 4. Enforce tiers: model permission, cost controls, atomic daily cap.
     const grant = await assertCanInvoke(userId, modelId);
+
+    // 4.5 Vision gate (Phase 12). The client resizes and counts because that is
+    //     where it can do so cheaply; the server re-checks both because the
+    //     client is not trusted. Every branch REFUSES the turn rather than
+    //     dropping the image — a silently dropped image means the model answers
+    //     confidently about something it never saw, which is the worst failure
+    //     available here.
+    if (imageIds.length > 0) {
+      assertImagesAllowed(imageIds.length, grant);
+    }
 
     // 5. Now safe to create a new conversation for a first message.
     const isNewConversation = conversation === null;
@@ -184,6 +207,26 @@ export const POST = auth(async (req) => {
     const attachedDocumentIds = attachedDocs.map((d) => d.id);
     const attachedDocumentNames = attachedDocs.map((d) => d.filename);
 
+    // Resolve the turn's images against the owner (invariant #1) before the run
+    // starts, for two reasons: an id that isn't the user's own ready image is
+    // rejected here rather than vanishing mid-run, and the filenames go into the
+    // PERSISTED human turn. That last part is what keeps the thread coherent —
+    // the bytes are gone after this turn, so the transcript needs to say what was
+    // discussed, or a later turn reads as an answer to nothing.
+    const turnImages =
+      imageIds.length > 0 ? await resolveTurnImages(userId, imageIds) : [];
+    if (turnImages.length !== imageIds.length) {
+      throw new AppError(
+        "not_found",
+        "One of the attached images is no longer available. Try attaching it again.",
+      );
+    }
+    const resolvedImageIds = turnImages.map((i) => i.id);
+    const humanText =
+      turnImages.length > 0
+        ? attachedImagesTurnText(text, turnImages.map((i) => i.filename))
+        : text;
+
     // User-authored personalization (preferred name + instructions), injected
     // into the prompt above and outranking inferred memory. Members and admins
     // only: guests never author settings, so we skip the read entirely for them
@@ -217,7 +260,11 @@ export const POST = auth(async (req) => {
         writer.write({ type: "start-step" });
 
         const events = graph.streamEvents(
-          { messages: [new HumanMessage(text)] },
+          // The persisted turn is TEXT-ONLY, always. The images are hydrated
+          // into an ephemeral copy inside the agent node and never written back
+          // to `messages` — see ChatGraphConfigurable.imageIds for why putting
+          // them here instead would quietly wreck the thread.
+          { messages: [new HumanMessage(humanText)] },
           {
             version: "v2",
             configurable: {
@@ -234,6 +281,10 @@ export const POST = auth(async (req) => {
               // set from the session-derived role, never from client input, so a
               // guest turn never gets the tool bound (invariant #2).
               canReadUrls: role !== "guest",
+              // Per-run, NOT checkpointed — the whole point. canUseVision is
+              // resolved from the server-side grant, never from client input.
+              imageIds: resolvedImageIds,
+              canUseVision: resolvedImageIds.length > 0,
             },
             signal: req.signal,
           },
@@ -259,6 +310,11 @@ export const POST = auth(async (req) => {
             outputTokens: usage.outputTokens,
             cacheReadTokens: usage.cacheReadTokens,
             latencyMs: Date.now() - startedAt,
+            // Image tokens already arrive inside input_tokens, so this adds no
+            // accounting — it makes image-bearing turns separable in the admin
+            // view, where their token profile would otherwise look like an
+            // inexplicably expensive short question.
+            imageCount: resolvedImageIds.length,
           });
 
           // On a completed run the graph has already committed the assistant

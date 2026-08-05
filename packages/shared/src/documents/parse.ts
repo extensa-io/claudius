@@ -80,6 +80,13 @@ async function extractSections(
   if (!kind) {
     throw new Error("Unsupported file type.");
   }
+  // Images never enter the text pipeline (Phase 12): they are created "ready"
+  // and hydrated into a single model request instead. Reaching here means a
+  // caller tried to parse one, which is a bug rather than a user error — fail
+  // loudly rather than producing an empty document with zero chunks.
+  if (kind === "image") {
+    throw new Error("Images are not parsed as text.");
+  }
 
   if (kind === "pdf") {
     // mergePages:false keeps text per page, so each chunk can cite its page.

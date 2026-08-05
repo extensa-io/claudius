@@ -1,6 +1,6 @@
 import type { ObjectId } from "mongodb";
 import { usersCol } from "../db/collections";
-import type { Role } from "../db/schemas";
+import type { Role, TierImagePolicy } from "../db/schemas";
 import { AppError } from "../errors";
 import { assertWithinMonthlyBudget } from "./budget";
 import {
@@ -24,6 +24,19 @@ export interface InvokeGrant {
    * it into the graph's load_context without a second user lookup (Phase 3).
    */
   memoryEnabled: boolean;
+  /**
+   * Whether the resolved model accepts image content blocks (Phase 12), read
+   * from the catalog entry. Absent on the entry reads as false: a model is never
+   * assumed to have vision.
+   */
+  supportsImages: boolean;
+  /**
+   * The role's image policy, or null when the role gets no image service at all
+   * (guests). Both fields are resolved here, server-side, for the same reason
+   * `memoryEnabled` is: the caller must not have to re-read the user or the
+   * settings to know what this turn is allowed to do.
+   */
+  imagePolicy: TierImagePolicy | null;
 }
 
 export interface AssertCanInvokeOptions {
@@ -109,5 +122,11 @@ export async function assertCanInvoke(
     // memoryEnabled predates Phase 3 for some rows; treat a missing flag as on,
     // matching the provisioning default and the migration backfill.
     memoryEnabled: user.memoryEnabled ?? true,
+    // Both image fields default CLOSED, the opposite of memoryEnabled: an
+    // un-migrated catalog entry or tier means no vision, never accidental
+    // vision. Guests have no `images` block by design, so this resolves to null
+    // for them without the guest tier being named anywhere in the vision path.
+    supportsImages: entry.supportsImages ?? false,
+    imagePolicy: tier.images ?? null,
   };
 }

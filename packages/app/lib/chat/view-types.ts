@@ -17,6 +17,22 @@ export interface ConversationSummary {
 export interface ModelOption {
   id: string;
   displayName: string;
+  /** Whether the model accepts images (Phase 12), from the catalog entry. The
+   * composer uses it to explain why attaching is unavailable on this model; the
+   * server re-checks it, so this is presentation only. */
+  supportsImages: boolean;
+}
+
+/**
+ * The signed-in role's image policy, or null when the role gets no image service
+ * (guests). Mirrors TierImagePolicy in shared. Advisory to the client — it
+ * resizes and counts here because it is cheap to do so — and authoritative on
+ * the server, which re-checks both.
+ */
+export interface ImagePolicyView {
+  maxPerTurn: number;
+  maxLongEdgePx: number;
+  enforcement: "hard" | "warn";
 }
 
 /** An attached document as the client renders it (chip + status). Mirrors the
@@ -26,7 +42,7 @@ export interface DocumentView {
   filename: string;
   mimeType: string;
   sizeBytes: number;
-  status: "uploaded" | "parsed" | "embedded" | "failed";
+  status: "uploaded" | "parsed" | "embedded" | "ready" | "failed";
   failureReason: string | null;
 }
 

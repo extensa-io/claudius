@@ -11,6 +11,7 @@ import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type {
   ConversationSummary,
   DocumentView,
+  ImagePolicyView,
   ModelOption,
 } from "@/lib/chat/view-types";
 import type { JobView } from "@/lib/jobs/view";
@@ -40,6 +41,7 @@ export function ChatApp({
   initialDocuments,
   initialJobs,
   budget,
+  imagePolicy,
   initialPrompt,
 }: {
   user: SidebarUser;
@@ -56,6 +58,12 @@ export function ChatApp({
   initialDocuments: DocumentView[];
   initialJobs: JobView[];
   budget: BudgetInfo | null;
+  /**
+   * The role's image policy (Phase 12), or null when the role gets no image
+   * service. Passed straight down to the composer, which uses it to resize
+   * before upload and to count attachments; the server re-checks both.
+   */
+  imagePolicy: ImagePolicyView | null;
   /**
    * A `?q=` deep-link query to auto-send as the first message of a new
    * conversation (Phase 9 widget path). Null unless the page was opened with a
@@ -245,6 +253,7 @@ export function ChatApp({
             role={user.role as Role}
             modelId={modelId}
             models={models}
+            imagePolicy={imagePolicy}
             onModelChange={changeModel}
             onConversationCreated={onConversationCreated}
             onTurnComplete={onTurnComplete}

@@ -17,6 +17,9 @@ export interface UsageEventInput {
   /** Prompt-cache reads. Always 0 until caching arrives (Phase 1 omits it). */
   cacheReadTokens?: number;
   latencyMs: number;
+  /** Images sent on this turn (Phase 12). Omitted entirely when there were none,
+   * so text turns keep the exact event shape they had before the field existed. */
+  imageCount?: number;
 }
 
 /**
@@ -33,6 +36,9 @@ export async function writeUsageEvent(input: UsageEventInput): Promise<void> {
       userId: input.userId,
       modelId: input.modelId,
       purpose: input.purpose,
+      ...(input.imageCount !== undefined
+        ? { imageCount: input.imageCount }
+        : {}),
     },
     conversationId: input.conversationId,
     inputTokens: input.inputTokens,

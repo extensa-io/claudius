@@ -24,6 +24,9 @@ export async function GET(): Promise<Response> {
     const models = (await getUsableModels(userId)).map((m) => ({
       id: m.id,
       displayName: m.displayName,
+      // Phase 12: lets the composer explain that a model can't read images
+      // rather than offering an attach button that would fail server-side.
+      supportsImages: m.supportsImages ?? false,
     }));
     return Response.json({ models });
   } catch (err) {

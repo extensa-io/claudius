@@ -12,6 +12,11 @@ interface DraftTier {
   memoryCap: string;
   monthlyTokenBudget: string;
   features: string;
+  /** Blank = no image service for this role (the block is omitted entirely,
+   * which is how the guest tier is configured off). */
+  imagesMaxPerTurn: string;
+  imagesMaxLongEdgePx: string;
+  imagesEnforcement: "hard" | "warn";
 }
 
 type Tiers = Record<Role, Tier>;
@@ -27,6 +32,9 @@ function toDraft(tiers: Tiers): Draft {
         memoryCap: t.memoryCap.toString(),
         monthlyTokenBudget: t.monthlyTokenBudget?.toString() ?? "",
         features: t.features.join(", "),
+        imagesMaxPerTurn: t.images?.maxPerTurn.toString() ?? "",
+        imagesMaxLongEdgePx: t.images?.maxLongEdgePx.toString() ?? "",
+        imagesEnforcement: t.images?.enforcement ?? "hard",
       },
     ] as const;
   });
@@ -67,7 +75,32 @@ export function TierEditor({ initial }: { initial: Tiers }): React.ReactNode {
       .split(",")
       .map((f) => f.trim())
       .filter(Boolean);
-    return { dailyMessageCap, memoryCap, monthlyTokenBudget, features };
+    // A blank image cap means the role gets NO image block at all, rather than
+    // a block with a cap of zero. Absence is the off switch (see TierSchema),
+    // and this keeps the admin UI able to express it.
+    const perTurnTrimmed = d.imagesMaxPerTurn.trim();
+    const longEdgeTrimmed = d.imagesMaxLongEdgePx.trim();
+    let images: Tier["images"];
+    if (perTurnTrimmed !== "" || longEdgeTrimmed !== "") {
+      const maxPerTurn = Number(perTurnTrimmed);
+      const maxLongEdgePx = Number(longEdgeTrimmed);
+      if (
+        !Number.isInteger(maxPerTurn) ||
+        maxPerTurn < 1 ||
+        !Number.isInteger(maxLongEdgePx) ||
+        maxLongEdgePx < 1
+      ) {
+        return null;
+      }
+      images = { maxPerTurn, maxLongEdgePx, enforcement: d.imagesEnforcement };
+    }
+    return {
+      dailyMessageCap,
+      memoryCap,
+      monthlyTokenBudget,
+      features,
+      ...(images ? { images } : {}),
+    };
   }
 
   async function save(): Promise<void> {
@@ -111,6 +144,9 @@ export function TierEditor({ initial }: { initial: Tiers }): React.ReactNode {
               <th className="pb-2 font-medium">Daily cap</th>
               <th className="pb-2 font-medium">Memory cap</th>
               <th className="pb-2 font-medium">Monthly tokens</th>
+              <th className="pb-2 font-medium">Images/turn</th>
+              <th className="pb-2 font-medium">Max long edge</th>
+              <th className="pb-2 font-medium">Over cap</th>
               <th className="pb-2 font-medium">Features</th>
             </tr>
           </thead>
@@ -138,6 +174,32 @@ export function TierEditor({ initial }: { initial: Tiers }): React.ReactNode {
                   />
                 </td>
                 <td className="py-2 pr-2">
+                  <NumInput
+                    value={draft[role].imagesMaxPerTurn}
+                    placeholder="off"
+                    onChange={(v) => set(role, "imagesMaxPerTurn", v)}
+                  />
+                </td>
+                <td className="py-2 pr-2">
+                  <NumInput
+                    value={draft[role].imagesMaxLongEdgePx}
+                    placeholder="off"
+                    onChange={(v) => set(role, "imagesMaxLongEdgePx", v)}
+                  />
+                </td>
+                <td className="py-2 pr-2">
+                  <select
+                    value={draft[role].imagesEnforcement}
+                    onChange={(e) =>
+                      set(role, "imagesEnforcement", e.target.value)
+                    }
+                    className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                  >
+                    <option value="hard">Refuse</option>
+                    <option value="warn">Warn</option>
+                  </select>
+                </td>
+                <td className="py-2 pr-2">
                   <input
                     type="text"
                     value={draft[role].features}
@@ -152,6 +214,8 @@ export function TierEditor({ initial }: { initial: Tiers }): React.ReactNode {
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         Monthly tokens blank = unlimited. Features are comma-separated flags.
+        Blank image fields turn images off entirely for that role, which is how
+        the guest tier is configured — not a cap of zero.
       </p>
     </section>
   );

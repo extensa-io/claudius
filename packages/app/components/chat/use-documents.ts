@@ -2,9 +2,12 @@
 
 import { upload } from "@vercel/blob/client";
 // Deep import (see composer.tsx): the barrel is not client-safe.
-import { classifyDocument } from "@claudius/shared/documents/constants";
+import {
+  classifyDocument,
+  uploadContentTypeFor,
+} from "@claudius/shared/documents/constants";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DocumentView } from "@/lib/chat/view-types";
+import type { DocumentView, ImagePolicyView } from "@/lib/chat/view-types";
 
 /**
  * Client state for a conversation's attached documents: the upload → parse →
@@ -17,13 +20,15 @@ import type { DocumentView } from "@/lib/chat/view-types";
  * through our own API (4.5MB route-body limit).
  */
 
-/** Chip status, a superset of the server status with two client-only phases. */
+/** Chip status, a superset of the server status with two client-only phases.
+ * "ready" is the image terminal state — no parse, no embed (Phase 12). */
 export type ChipStatus =
   | "uploading"
   | "uploaded"
   | "parsing"
   | "parsed"
   | "embedded"
+  | "ready"
   | "failed";
 
 export interface DocChip {
@@ -34,17 +39,65 @@ export interface DocChip {
   /** 0–100 during the upload phase. */
   percentage?: number;
   failureReason?: string | null;
+  /** Images render as a thumbnail and ride the turn rather than the retrieval
+   * pipeline, so the chip has to know which kind it is. */
+  isImage?: boolean;
+  /** Object URL of the local file, for the thumbnail. Images only, and only for
+   * the session that uploaded them — the blob itself is private and not
+   * fetchable by URL, and it is deliberately not proxied back for a preview. */
+  previewUrl?: string;
 }
 
-/** Force an allowed upload content type from the extension; the server decides
- * parsing by extension regardless, and code/text is re-decoded as UTF-8. */
-function contentTypeFor(filename: string): string {
-  const ext = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
-  if (ext === "pdf") return "application/pdf";
-  if (ext === "docx") {
-    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+/**
+ * Downscale an image so its long edge is at most `maxLongEdgePx`, returning the
+ * original untouched when it already fits (or when anything goes wrong — a
+ * failed resize must not cost the user their attachment).
+ *
+ * This happens BEFORE upload on purpose. Resizing server-side would mean the
+ * full-size bytes still crossed the wire and still occupied Blob storage; doing
+ * it here means the oversized pixels never exist anywhere but the user's own
+ * machine. The output is JPEG for photographs and PNG for anything with
+ * transparency, since flattening a screenshot's alpha channel to black is a
+ * worse outcome than a slightly larger file.
+ */
+async function downscaleImage(
+  file: File,
+  maxLongEdgePx: number,
+): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const longEdge = Math.max(bitmap.width, bitmap.height);
+    if (longEdge <= maxLongEdgePx) {
+      bitmap.close();
+      return file;
+    }
+    const scale = maxLongEdgePx / longEdge;
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const keepAlpha = file.type === "image/png" || file.type === "image/webp";
+    const outType = keepAlpha ? "image/png" : "image/jpeg";
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, outType, 0.9),
+    );
+    if (!blob) return file;
+
+    // Keep the base name so the chip and the persisted turn still name the file
+    // the user recognises; only the extension follows the re-encode.
+    const base = file.name.replace(/\.[^.]+$/, "");
+    const ext = outType === "image/png" ? "png" : "jpg";
+    return new File([blob], `${base}.${ext}`, { type: outType });
+  } catch {
+    return file;
   }
-  return "text/plain";
 }
 
 /** ".JPG" → "JPG files", for a rejection message that names what was picked. */
@@ -68,19 +121,30 @@ export interface UseDocuments {
   /** Real ids of documents uploaded before the conversation existed. */
   pendingDocumentIds: string[];
   hasReadyDocuments: boolean;
+  /** Ids of images attached to the NEXT turn, in attach order (Phase 12). */
+  attachedImageIds: string[];
+  /** True when the attached image count is over the tier cap. Under "hard"
+   * enforcement the composer blocks send; under "warn" it shows the cost and
+   * lets the turn through. */
+  overImageCap: boolean;
   uploadFiles: (files: FileList | File[]) => void;
   retry: (id: string) => void;
   remove: (id: string) => void;
   /** Clear pending ids after a turn associates them server-side. */
   clearPending: () => void;
+  /** Drop the image chips after a turn has sent them. Images live for exactly
+   * one turn, so leaving the chips up would imply they are still attached. */
+  clearImages: () => void;
 }
 
 export function useDocuments({
   conversationId,
   initialDocuments,
+  imagePolicy,
 }: {
   conversationId: string | null;
   initialDocuments: DocumentView[];
+  imagePolicy: ImagePolicyView | null;
 }): UseDocuments {
   const [chips, setChips] = useState<DocChip[]>(() =>
     initialDocuments.map(toChip),
@@ -101,6 +165,15 @@ export function useDocuments({
       prev.map((c) => (c.id === id ? { ...c, ...next } : c)),
     );
   }, []);
+
+  // The images this turn will send: real ids only, in attach order. Held in a
+  // ref as well so uploadFiles can count them without re-creating the callback
+  // on every chip change.
+  const attachedImageIds = chips
+    .filter((c) => c.isImage && c.status === "ready")
+    .map((c) => c.id);
+  const attachedImageIdsRef = useRef<string[]>(attachedImageIds);
+  attachedImageIdsRef.current = attachedImageIds;
 
   // Run the parse pipeline for a created document and reflect the final status.
   const runParse = useCallback(
@@ -146,9 +219,17 @@ export function useDocuments({
   const uploadOne = useCallback(
     async (file: File): Promise<void> => {
       const tmpId = `tmp-${tmpCounter.current++}`;
+      const isImage = classifyDocument(file.name) === "image";
       setChips((prev) => [
         ...prev,
-        { id: tmpId, filename: file.name, status: "uploading", percentage: 0 },
+        {
+          id: tmpId,
+          filename: file.name,
+          status: "uploading",
+          percentage: 0,
+          isImage,
+          ...(isImage ? { previewUrl: URL.createObjectURL(file) } : {}),
+        },
       ]);
 
       // Reject unsupported types *before* spending an upload on them. Without
@@ -160,18 +241,36 @@ export function useDocuments({
           status: "failed",
           failureReason: `${
             extensionLabel(file.name) ?? "This file type"
-          } isn't supported. Attach a PDF, Word document, or text/code file.`,
+          } isn't supported. Attach a PDF, Word document, image, or text/code file.`,
+        });
+        return;
+      }
+
+      // Guard the picker's accept filter with a policy check: an image dragged
+      // in on a role with no image service (or with the policy absent) is
+      // refused here rather than at the far end of an upload.
+      if (isImage && !imagePolicy) {
+        patch(tmpId, {
+          status: "failed",
+          failureReason: "Image attachments aren't available on your plan.",
         });
         return;
       }
 
       try {
-        const blob = await upload(file.name, file, {
+        // Downscale to the tier's long-edge target BEFORE upload, so the
+        // oversized bytes never occupy Blob storage or request bandwidth.
+        const toUpload =
+          isImage && imagePolicy
+            ? await downscaleImage(file, imagePolicy.maxLongEdgePx)
+            : file;
+
+        const blob = await upload(toUpload.name, toUpload, {
           // Private store: documents must not be publicly fetchable by URL. The
           // parse pipeline reads them server-side with the SDK's authenticated get().
           access: "private",
           handleUploadUrl: "/api/blob/upload",
-          contentType: contentTypeFor(file.name),
+          contentType: uploadContentTypeFor(toUpload.name),
           onUploadProgress: ({ percentage }) =>
             patch(tmpId, { percentage }),
         });
@@ -183,9 +282,9 @@ export function useDocuments({
           body: JSON.stringify({
             conversationId: convIdRef.current,
             blobUrl: blob.url,
-            filename: file.name,
+            filename: toUpload.name,
             mimeType: blob.contentType,
-            sizeBytes: file.size,
+            sizeBytes: toUpload.size,
           }),
         });
         if (!res.ok) {
@@ -196,16 +295,34 @@ export function useDocuments({
         }
         const { document } = (await res.json()) as { document: DocumentView };
 
-        // Swap the temp chip for the real one.
+        // Swap the temp chip for the real one, keeping the local preview: the
+        // blob is private, so the object URL from this session is the only
+        // thumbnail source we have.
         setChips((prev) =>
-          prev.map((c) => (c.id === tmpId ? toChip(document) : c)),
+          prev.map((c) =>
+            c.id === tmpId
+              ? {
+                  ...toChip(document),
+                  ...(c.isImage !== undefined ? { isImage: c.isImage } : {}),
+                  ...(c.previewUrl !== undefined
+                    ? { previewUrl: c.previewUrl }
+                    : {}),
+                }
+              : c,
+          ),
         );
         // Uploaded before the conversation existed → must be associated on send.
-        if (convIdRef.current === null) {
+        // Images are excluded: association is what makes a document part of the
+        // conversation for the rest of its life, which is exactly the lifetime an
+        // image must not have. An image stays unassociated and is referenced by
+        // id for one turn only.
+        if (convIdRef.current === null && !isImage) {
           setPendingIds((prev) => [...prev, document.id]);
         }
 
-        await runParse(document.id);
+        // Images skip parse entirely — they are created "ready" and have no text
+        // to chunk or embed (Phase 12).
+        if (!isImage) await runParse(document.id);
       } catch (err) {
         patch(tmpId, {
           status: "failed",
@@ -214,14 +331,42 @@ export function useDocuments({
         });
       }
     },
-    [patch, runParse],
+    [patch, runParse, imagePolicy],
   );
 
   const uploadFiles = useCallback(
     (files: FileList | File[]): void => {
-      for (const file of Array.from(files)) void uploadOne(file);
+      const incoming = Array.from(files);
+      let imagesSoFar = attachedImageIdsRef.current.length;
+      for (const file of incoming) {
+        // A HARD cap is refused before the upload is spent, which is the whole
+        // point of checking client-side: the bytes never leave the machine. A
+        // WARN cap uploads and lets the composer show the cost instead.
+        if (
+          classifyDocument(file.name) === "image" &&
+          imagePolicy?.enforcement === "hard" &&
+          imagesSoFar >= imagePolicy.maxPerTurn
+        ) {
+          const tmpId = `tmp-${tmpCounter.current++}`;
+          setChips((prev) => [
+            ...prev,
+            {
+              id: tmpId,
+              filename: file.name,
+              status: "failed",
+              isImage: true,
+              failureReason: `You can attach up to ${imagePolicy.maxPerTurn} image${
+                imagePolicy.maxPerTurn === 1 ? "" : "s"
+              } per message.`,
+            },
+          ]);
+          continue;
+        }
+        if (classifyDocument(file.name) === "image") imagesSoFar += 1;
+        void uploadOne(file);
+      }
     },
-    [uploadOne],
+    [uploadOne, imagePolicy],
   );
 
   const retry = useCallback(
@@ -247,13 +392,26 @@ export function useDocuments({
 
   const clearPending = useCallback(() => setPendingIds([]), []);
 
+  const clearImages = useCallback(() => {
+    setChips((prev) => {
+      for (const c of prev) {
+        if (c.isImage && c.previewUrl) URL.revokeObjectURL(c.previewUrl);
+      }
+      return prev.filter((c) => !c.isImage);
+    });
+  }, []);
+
   return {
     chips,
     pendingDocumentIds: pendingIds,
     hasReadyDocuments: chips.some((c) => c.status === "embedded"),
+    attachedImageIds,
+    overImageCap:
+      imagePolicy !== null && attachedImageIds.length > imagePolicy.maxPerTurn,
     uploadFiles,
     retry,
     remove,
     clearPending,
+    clearImages,
   };
 }

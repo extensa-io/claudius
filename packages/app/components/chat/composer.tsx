@@ -3,10 +3,14 @@
 // Deep import, not the package barrel: this is a client component, and the
 // barrel re-exports the env schema and the Mongo client. `documents/constants`
 // is dependency-free and safe to ship to the browser.
-import { UPLOAD_ACCEPT_ATTRIBUTE } from "@claudius/shared/documents/constants";
+import {
+  UPLOAD_ACCEPT_ATTRIBUTE,
+  UPLOAD_ACCEPT_ATTRIBUTE_NO_IMAGES,
+} from "@claudius/shared/documents/constants";
 import { ArrowUp, Paperclip, Square, Telescope } from "lucide-react";
 import { useRef, useState } from "react";
 import { DocumentChips } from "./document-chips";
+import type { ImagePolicyView } from "@/lib/chat/view-types";
 import type { DocChip } from "./use-documents";
 
 /**
@@ -26,6 +30,11 @@ export function Composer({
   busy,
   disabled,
   canAttach,
+  canAttachImages,
+  imagePolicy,
+  imageCount,
+  overImageCap,
+  modelDisplayName,
   chips,
   onUploadFiles,
   onRetryDoc,
@@ -39,6 +48,13 @@ export function Composer({
   busy: boolean;
   disabled?: boolean;
   canAttach: boolean;
+  /** Whether images may be attached: the role's tier allows it AND the selected
+   * model can see. Drives the picker filter and the explanation below. */
+  canAttachImages: boolean;
+  imagePolicy: ImagePolicyView | null;
+  imageCount: number;
+  overImageCap: boolean;
+  modelDisplayName: string | null;
   chips: DocChip[];
   onUploadFiles: (files: FileList) => void;
   onRetryDoc: (id: string) => void;
@@ -53,7 +69,9 @@ export function Composer({
 
   const submit = (): void => {
     const text = value.trim();
-    if (!text || busy || disabled) return;
+    // An image-only turn is legal (Phase 12): a picture with no question reads
+    // as "what is this?", so an attached image is enough to send on.
+    if ((!text && imageCount === 0) || busy || disabled) return;
     onSend(text);
     setValue("");
   };
@@ -67,6 +85,22 @@ export function Composer({
             onRetry={onRetryDoc}
             onRemove={onRemoveDoc}
           />
+        )}
+        {canAttach && overImageCap && imagePolicy?.enforcement === "warn" && (
+          // The soft cap exists to make the cost visible, not to stop an admin
+          // who is deliberately pushing past it — so this warns and the turn
+          // still sends.
+          <p className="mb-2 text-xs text-muted-foreground">
+            {imageCount} images attached, above the {imagePolicy.maxPerTurn}
+            -image guideline. Each image costs roughly{" "}
+            {imagePolicy.maxLongEdgePx > 1568 ? "4,800" : "1,600"} input tokens.
+          </p>
+        )}
+        {canAttach && !canAttachImages && imagePolicy !== null && (
+          <p className="mb-2 text-xs text-muted-foreground">
+            {modelDisplayName ?? "This model"} can&apos;t read images. Switch
+            models to attach one.
+          </p>
         )}
         <div className="rounded-lg border border-border bg-card px-3 py-2.5 focus-within:border-ring">
           <textarea
@@ -91,7 +125,11 @@ export function Composer({
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept={UPLOAD_ACCEPT_ATTRIBUTE}
+                    accept={
+                      canAttachImages
+                        ? UPLOAD_ACCEPT_ATTRIBUTE
+                        : UPLOAD_ACCEPT_ATTRIBUTE_NO_IMAGES
+                    }
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files?.length) onUploadFiles(e.target.files);

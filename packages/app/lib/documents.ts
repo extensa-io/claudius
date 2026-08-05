@@ -52,7 +52,8 @@ export async function createDocument(params: {
   mimeType: string;
   sizeBytes: number;
 }): Promise<DocumentRecord | null> {
-  if (classifyDocument(params.filename) === null) return null;
+  const kind = classifyDocument(params.filename);
+  if (kind === null) return null;
 
   const doc: DocumentRecord = {
     userId: params.userId,
@@ -60,7 +61,11 @@ export async function createDocument(params: {
     blobUrl: params.blobUrl,
     mimeType: params.mimeType,
     sizeBytes: params.sizeBytes,
-    status: "uploaded",
+    // An image is born finished (Phase 12). There is no parse and no embed to
+    // wait for: it has no text to chunk, so "ready" is its terminal state on
+    // creation. Crucially it is NOT "embedded", which is what keeps images out
+    // of getRetrievableDocuments without that query needing a special case.
+    status: kind === "image" ? "ready" : "uploaded",
     conversationId: params.conversationId,
     createdAt: new Date(),
   };
@@ -138,6 +143,11 @@ export async function associatePendingDocuments(
  * A conversation's documents that are ready for retrieval (embedded), with their
  * names. The chat route passes the ids to scope `retrieve_documents` and the
  * names into the system prompt so the model knows files are present.
+ *
+ * Images are structurally excluded: they are created "ready", never "embedded",
+ * and have no chunks to search. So an image is never returned here and therefore
+ * never reachable through `retrieve_documents` — the only way an image reaches
+ * the model is ephemeral hydration into a single turn.
  */
 export async function getRetrievableDocuments(
   userId: ObjectId,

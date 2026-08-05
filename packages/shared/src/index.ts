@@ -26,9 +26,17 @@ export {
   ALLOWED_UPLOAD_CONTENT_TYPES,
   UPLOAD_ACCEPT_ATTRIBUTE,
   classifyDocument,
+  uploadContentTypeFor,
+  IMAGE_MIME_BY_EXTENSION,
   type DocumentKind,
 } from "./documents/constants";
 export { parseAndEmbedDocument } from "./documents/parse";
+export {
+  resolveTurnImages,
+  hydrateTurnImages,
+  type TurnImage,
+  type HydratedImage,
+} from "./documents/images";
 export * from "./answer";
 export * from "./agent";
 export * from "./tiers";

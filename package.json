@@ -24,6 +24,7 @@
     "db:migrate:memory-management": "npm -w @claudius/shared run db:migrate:memory-management",
     "db:migrate:search": "npm -w @claudius/shared run db:migrate:search",
     "db:migrate:routing": "npm -w @claudius/shared run db:migrate:routing",
+    "db:migrate:vision": "npm -w @claudius/shared run db:migrate:vision",
     "db:sync:pricing": "npm -w @claudius/shared run db:sync:pricing",
     "worker:dev": "npm -w @claudius/worker run dev"
   },

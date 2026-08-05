@@ -38,6 +38,14 @@ export const ModelCatalogEntrySchema = z.object({
   inputPricePerMTok: z.number().nonnegative(),
   outputPricePerMTok: z.number().nonnegative(),
   roles: z.array(zRole),
+  /**
+   * Whether this model accepts image content blocks (Phase 12). Optional so
+   * catalog documents written before Phase 12 still parse; absent reads as
+   * false, so a model is never assumed to have vision. Resolved server-side and
+   * surfaced through InvokeGrant — the client never asserts it, and an image
+   * sent to a model without it is a rejected turn rather than a dropped image.
+   */
+  supportsImages: z.boolean().optional(),
 });
 export type ModelCatalogEntry = z.infer<typeof ModelCatalogEntrySchema>;
 
@@ -59,8 +67,39 @@ export const TierSchema = z.object({
    */
   monthlyTokenBudget: z.number().int().nonnegative().nullable(),
   features: z.array(z.string()),
+  /**
+   * Image-input policy for the tier (Phase 12). Lives here rather than as a
+   * constant in the vision path so an admin can retune it in /admin/config
+   * without a deploy, and — more importantly — so the guest tier is configured
+   * off rather than special-cased in code: an ABSENT block means no image
+   * service at all for that role. Optional for the same reason `customBangs`
+   * and `cacheTtls` are: pre-migration `tiers` documents must still parse.
+   */
+  images: z
+    .object({
+      /** Images accepted on a single turn. */
+      maxPerTurn: z.number().int().positive(),
+      /**
+       * Long-edge pixel target the client downscales to before upload, so the
+       * oversized bytes never occupy Blob storage or request bandwidth. 1568px
+       * is where Claude bills roughly 1600 input tokens per image; 2576px is the
+       * high-resolution ceiling and costs ~3x that.
+       */
+      maxLongEdgePx: z.number().int().positive(),
+      /**
+       * What happens above `maxPerTurn`. "hard" refuses the turn; "warn" shows
+       * the cost in the composer but proceeds — the admin is the person
+       * diagnosing the app and occasionally needs to push past a limit
+       * deliberately.
+       */
+      enforcement: z.enum(["hard", "warn"]),
+    })
+    .optional(),
 });
 export type Tier = z.infer<typeof TierSchema>;
+
+/** The tier's image policy, or null when the role gets no image service. */
+export type TierImagePolicy = NonNullable<Tier["images"]>;
 
 /** _id: "tiers" — limits keyed by role. */
 export const TiersSettingsSchema = z.object({

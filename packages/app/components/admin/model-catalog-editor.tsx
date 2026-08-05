@@ -8,7 +8,8 @@ import { sendJson } from "@/lib/admin-client";
 const ROLES: Role[] = ["guest", "member", "admin"];
 
 /**
- * Model catalog editor: per-model pricing (per million tokens) and which roles
+ * Model catalog editor: per-model pricing (per million tokens), image support,
+ * and which roles
  * may use each model. Unchecking every role disables a model without deleting
  * it — the same effect as removing it from the tier, but reversible. Ids and
  * inference-profile ids stay read-only; changing those is a code/seed concern.
@@ -69,6 +70,7 @@ export function ModelCatalogEditor({
               <th className="pb-2 text-right font-medium">$/MTok in</th>
               <th className="pb-2 text-right font-medium">$/MTok out</th>
               <th className="pb-2 font-medium">Roles</th>
+              <th className="pb-2 font-medium">Vision</th>
             </tr>
           </thead>
           <tbody>
@@ -104,6 +106,18 @@ export function ModelCatalogEditor({
                     ))}
                   </div>
                 </td>
+                <td className="py-2">
+                  <label className="flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={m.supportsImages ?? false}
+                      onChange={() =>
+                        update(m.id, { supportsImages: !(m.supportsImages ?? false) })
+                      }
+                    />
+                    images
+                  </label>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -111,6 +125,8 @@ export function ModelCatalogEditor({
       </div>
       <p className="mt-2 text-xs text-muted-foreground">
         A price of -1 means unconfirmed. Uncheck all roles to disable a model.
+        Vision off means an attached image is refused on that model rather than
+        silently dropped.
       </p>
     </section>
   );

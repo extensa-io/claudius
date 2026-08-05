@@ -26,6 +26,15 @@ export const UsageEventMetaSchema = z.object({
     // `chat` so the admin dashboard can size dictionary spend on its own.
     "dictionary",
   ]),
+  /**
+   * How many images this turn sent (Phase 12). Lives under `meta` so the admin
+   * usage view can isolate image-bearing turns, whose input-token profile is
+   * nothing like a text turn's — roughly 1600 tokens per image at 1568px, so a
+   * three-image turn dwarfs the question attached to it. Optional (absent on
+   * every pre-Phase-12 event) and low-cardinality, so it costs the time-series
+   * bucketing nothing.
+   */
+  imageCount: z.number().int().nonnegative().optional(),
 });
 
 export const UsageEventSchema = z.object({

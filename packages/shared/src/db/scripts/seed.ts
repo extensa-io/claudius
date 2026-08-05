@@ -40,6 +40,7 @@ const modelCatalog: ModelCatalogSettings = {
       inputPricePerMTok: PRICE_TO_CONFIRM,
       outputPricePerMTok: PRICE_TO_CONFIRM,
       roles: ["guest", "member", "admin"],
+      supportsImages: true,
     },
     {
       id: "sonnet",
@@ -48,6 +49,7 @@ const modelCatalog: ModelCatalogSettings = {
       inputPricePerMTok: PRICE_TO_CONFIRM,
       outputPricePerMTok: PRICE_TO_CONFIRM,
       roles: ["member", "admin"],
+      supportsImages: true,
     },
     {
       id: "opus",
@@ -56,6 +58,7 @@ const modelCatalog: ModelCatalogSettings = {
       inputPricePerMTok: PRICE_TO_CONFIRM,
       outputPricePerMTok: PRICE_TO_CONFIRM,
       roles: ["admin"],
+      supportsImages: true,
     },
   ],
 };
@@ -80,6 +83,9 @@ const tiers: TiersSettings = {
     // a per-guest token count, is the guest tier's cost control.
     monthlyTokenBudget: null,
     features: ["chat", "memory"],
+    // No `images` block, deliberately: absence is how the guest tier gets no
+    // image service at all rather than a smaller one. Image tokens are the
+    // easiest way to run up spend on an unauthenticated tier.
   },
   member: {
     dailyMessageCap: 200,
@@ -88,6 +94,9 @@ const tiers: TiersSettings = {
     // as a runaway-cost soft-stop, not a rationing mechanism.
     monthlyTokenBudget: 20_000_000,
     features: ["chat", "files", "memory", "research"],
+    // 1568px is where Claude bills ~1600 input tokens per image, and a
+    // screenshot or a photographed receipt reads fine at it.
+    images: { maxPerTurn: 3, maxLongEdgePx: 1568, enforcement: "hard" },
   },
   admin: {
     dailyMessageCap: 1000,
@@ -95,6 +104,10 @@ const tiers: TiersSettings = {
     // Admins are exempt from budget enforcement in code; null documents that.
     monthlyTokenBudget: null,
     features: ["chat", "files", "memory", "research", "admin"],
+    // The high-resolution ceiling (~3x the tokens) for dense material, and a
+    // warning rather than a refusal above the cap — the admin is the person
+    // diagnosing the app and sometimes needs to exceed it on purpose.
+    images: { maxPerTurn: 3, maxLongEdgePx: 2576, enforcement: "warn" },
   },
 };
 

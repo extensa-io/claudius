@@ -6,7 +6,11 @@ import { PanelLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Role } from "@claudius/shared";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
-import type { DocumentView, ModelOption } from "@/lib/chat/view-types";
+import type {
+  DocumentView,
+  ImagePolicyView,
+  ModelOption,
+} from "@/lib/chat/view-types";
 import type { JobView } from "@/lib/jobs/view";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
@@ -29,6 +33,7 @@ export function ChatPane({
   role,
   modelId,
   models,
+  imagePolicy,
   onModelChange,
   onConversationCreated,
   onTurnComplete,
@@ -43,6 +48,8 @@ export function ChatPane({
   role: Role;
   modelId: string;
   models: ModelOption[];
+  /** The role's image policy, or null when the role gets no image service. */
+  imagePolicy: ImagePolicyView | null;
   onModelChange: (id: string) => void;
   onConversationCreated: (id: string, title: string) => void;
   onTurnComplete: () => void;
@@ -54,7 +61,20 @@ export function ChatPane({
 }): React.ReactNode {
   const canAttach = role !== "guest";
   const canResearch = role !== "guest";
-  const documents = useDocuments({ conversationId, initialDocuments });
+  // Images are turn-scoped, so a resumed thread must not rehydrate them as
+  // attachments: the bytes are long gone and the persisted turn already names
+  // them. Filter them out of the seeded chips rather than showing a chip that
+  // would silently re-attach nothing.
+  const documents = useDocuments({
+    conversationId,
+    initialDocuments: initialDocuments.filter((d) => d.status !== "ready"),
+    imagePolicy,
+  });
+  // Vision needs BOTH the role's policy and a model that can see. The server
+  // decides for real; this only drives the affordance and the explanation.
+  const selectedModel = models.find((m) => m.id === modelId);
+  const canAttachImages =
+    imagePolicy !== null && (selectedModel?.supportsImages ?? false);
   const [researchOn, setResearchOn] = useState(false);
   const [researchError, setResearchError] = useState<string | null>(null);
   const transport = useMemo(
@@ -87,6 +107,7 @@ export function ChatPane({
               modelId: body?.modelId,
               text,
               documentIds: body?.documentIds,
+              imageIds: body?.imageIds,
             },
           };
         },
@@ -203,9 +224,13 @@ export function ChatPane({
           conversationId,
           modelId,
           documentIds: documents.pendingDocumentIds,
+          imageIds: documents.attachedImageIds,
         },
       },
     );
+    // Images live for exactly one turn: drop the chips as soon as the turn that
+    // carries them is sent, so nothing implies they are still attached.
+    if (documents.attachedImageIds.length > 0) documents.clearImages();
   };
 
   // Deep-link auto-send (Phase 9): if the page was opened with a `?q=` query on
@@ -304,6 +329,11 @@ export function ChatPane({
         onStop={stop}
         busy={busy}
         canAttach={canAttach}
+        canAttachImages={canAttachImages}
+        imagePolicy={imagePolicy}
+        imageCount={documents.attachedImageIds.length}
+        overImageCap={documents.overImageCap}
+        modelDisplayName={selectedModel?.displayName ?? null}
         chips={documents.chips}
         onUploadFiles={documents.uploadFiles}
         onRetryDoc={documents.retry}

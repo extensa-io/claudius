@@ -1,6 +1,6 @@
 import { dispatchCustomEvent } from "@langchain/core/callbacks/dispatch";
 import type { BaseMessage } from "@langchain/core/messages";
-import { SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import {
   Annotation,
@@ -11,6 +11,7 @@ import {
 } from "@langchain/langgraph";
 import { ToolNode, toolsCondition } from "@langchain/langgraph/prebuilt";
 import { ObjectId } from "mongodb";
+import { hydrateTurnImages, resolveTurnImages } from "../documents/images";
 import { getProfileMemories, retrieveMemories } from "../memory/retrieve";
 import type { RetrievedMemory } from "../memory/types";
 import { getCheckpointer } from "./checkpointer";
@@ -93,6 +94,32 @@ export interface ChatGraphConfigurable {
    * member-only settings above (invariant #2). No client input decides this.
    */
   canReadUrls?: boolean;
+  /**
+   * Image ids attached to THIS turn (Phase 12), resolved and ownership-checked
+   * by the route.
+   *
+   * They travel in `configurable` — which is per-run and NOT checkpointed — for
+   * a specific reason. `messages` is part of the state MongoDBSaver persists, and
+   * it writes a checkpoint per graph step, each carrying the full channel. A
+   * base64 image placed in a message is therefore rewritten on every step of
+   * every later turn for the life of the thread: a 4MB photo does not cost 4MB
+   * once, it costs 4MB times however many checkpoints the thread accumulates,
+   * heading for the 16MB BSON ceiling with nothing in the checkpointer to stop
+   * it. It would also be replayed into every subsequent model call, silently
+   * re-billed as input tokens with no UI saying the image is still attached.
+   *
+   * Keeping the ids here and hydrating the bytes at invoke time avoids both. It
+   * is the same trick the system prompt and `memoryContext` already use: rebuilt
+   * per run, never persisted. The one-turn lifetime then needs no eviction
+   * policy — the next turn simply carries no ids, so nothing is hydrated.
+   */
+  imageIds?: string[];
+  /**
+   * Whether this turn may send images at all: the role's tier permits it AND the
+   * resolved model supports vision. Set from the server-side grant, never from
+   * client input (invariant #2), exactly like canReadUrls.
+   */
+  canUseVision?: boolean;
 }
 
 function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
@@ -196,6 +223,9 @@ async function agent(
     preferredName,
     customInstructions,
     canReadUrls,
+    imageIds,
+    canUseVision,
+    userId,
   } = readConfigurable(config);
   // Offer retrieve_documents only when this conversation actually has embedded
   // documents, so the model never reaches for document search on a plain chat;
@@ -231,12 +261,78 @@ async function agent(
     maxTokens !== undefined ? { maxTokens } : {},
   ).bindTools(boundTools);
 
+  // Ephemeral image hydration (Phase 12). `messages` below is a LOCAL array; the
+  // multimodal turn it may contain is handed to the model and then dropped on the
+  // floor. Only `response` is returned as an update, so nothing image-bearing
+  // ever reaches the checkpointer. See ChatGraphConfigurable.imageIds for why
+  // that matters.
+  const messages = await withHydratedImages(state.messages, {
+    imageIds: canUseVision ? (imageIds ?? []) : [],
+    userId,
+  });
+
   const response = await model.invoke(
-    [new SystemMessage(systemPrompt), ...state.messages],
+    [new SystemMessage(systemPrompt), ...messages],
     config,
   );
 
   return { messages: [response] };
+}
+
+/**
+ * Return a copy of the thread in which the FINAL human turn carries this run's
+ * images as content blocks. Everything else is passed through untouched, and the
+ * input array is never mutated — the caller's `state.messages` must stay exactly
+ * as the checkpointer will persist it.
+ *
+ * Images ride on the last human turn rather than a message of their own because
+ * that is the turn they were attached to: the user's question and the picture
+ * they asked it about belong in the same block, which is also the arrangement the
+ * model reads most naturally.
+ */
+export async function withHydratedImages(
+  messages: BaseMessage[],
+  { imageIds, userId }: { imageIds: string[]; userId: string | undefined },
+): Promise<BaseMessage[]> {
+  if (imageIds.length === 0 || !userId) return messages;
+
+  // findLast* needs a newer lib target than this package builds against; a
+  // reverse scan is equivalent and keeps the tsconfig alone.
+  let lastHumanIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]!.getType() === "human") {
+      lastHumanIndex = i;
+      break;
+    }
+  }
+  if (lastHumanIndex === -1) return messages;
+
+  const resolved = await resolveTurnImages(new ObjectId(userId), imageIds);
+  const hydrated = await hydrateTurnImages(resolved);
+  if (hydrated.length === 0) return messages;
+
+  const original = messages[lastHumanIndex]!;
+  const text = original.text;
+  const multimodal = new HumanMessage({
+    content: [
+      ...hydrated.map((image) => ({
+        type: "image" as const,
+        source: {
+          type: "base64" as const,
+          media_type: image.mimeType,
+          data: image.base64,
+        },
+      })),
+      // Text last: with the images already in view, the question reads as being
+      // about them. An image-only turn contributes no text block at all rather
+      // than an empty string, which Bedrock rejects.
+      ...(text.trim().length > 0 ? [{ type: "text" as const, text }] : []),
+    ],
+  });
+
+  const copy = [...messages];
+  copy[lastHumanIndex] = multimodal;
+  return copy;
 }
 
 const builder = new StateGraph(GraphAnnotation)

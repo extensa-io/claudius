@@ -111,11 +111,23 @@ export const ChatRequestSchema = z.object({
   // the first message of a new conversation, and `.optional()` rejects `null`.
   conversationId: z.string().min(1).nullish(),
   modelId: z.string().min(1),
-  text: z.string().min(1).max(32_000),
+  // Not `.min(1)`: an image-only turn is legal (Phase 12). "What is this?" is
+  // implicit when someone attaches a photo and sends it with no question, and
+  // rejecting that would be a worse experience than answering it. A turn with
+  // neither text nor images is still refused, in the route.
+  text: z.string().max(32_000),
   // Pending attachments uploaded before the conversation existed. The route
   // associates these to the conversation (only the user's own, still-pending
   // ones) before the turn runs. Bounded to keep the payload sane.
   documentIds: z.array(z.string().min(1)).max(20).optional(),
+  /**
+   * Images attached to THIS turn (Phase 12). Separate from `documentIds`
+   * because they have an entirely different lifecycle: a document is ingested
+   * once and retrieved for the rest of the conversation, whereas an image is
+   * sent with this request and never again. The real cap is the tier's, enforced
+   * in the route; this bound is only a payload sanity limit.
+   */
+  imageIds: z.array(z.string().min(1)).max(10).optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;

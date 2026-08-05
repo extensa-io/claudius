@@ -22,6 +22,8 @@ const STATUS_LABEL: Record<ChipStatus, string> = {
   parsing: "Processing",
   parsed: "Processing",
   embedded: "Ready",
+  // An image is born finished: it never parses or embeds (Phase 12).
+  ready: "Attached",
   failed: "Failed",
 };
 
@@ -29,7 +31,7 @@ function StatusIcon({ status }: { status: ChipStatus }): React.ReactNode {
   if (status === "failed") {
     return <CircleAlert className="size-3.5 shrink-0 text-destructive" />;
   }
-  if (status === "embedded") {
+  if (status === "embedded" || status === "ready") {
     return <FileText className="size-3.5 shrink-0 text-primary" />;
   }
   return <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />;
@@ -54,7 +56,18 @@ export function DocumentChips({
           className="flex max-w-full items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs"
           title={chip.failureReason ?? chip.filename}
         >
-          <StatusIcon status={chip.status} />
+          {chip.isImage && chip.previewUrl ? (
+            // A thumbnail says more than a filename about what is attached, and
+            // it is free: the object URL is the local file the user just picked.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={chip.previewUrl}
+              alt=""
+              className="size-6 shrink-0 rounded-sm object-cover"
+            />
+          ) : (
+            <StatusIcon status={chip.status} />
+          )}
           <span className="truncate font-medium">{chip.filename}</span>
           <span className="shrink-0 text-muted-foreground">
             {chip.status === "uploading" && chip.percentage !== undefined
