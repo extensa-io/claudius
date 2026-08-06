@@ -4,6 +4,7 @@ import {
   classifyDocument,
   UPLOAD_ACCEPT_ATTRIBUTE,
   UPLOAD_ACCEPT_ATTRIBUTE_NO_IMAGES,
+  sniffImageMime,
   uploadContentTypeFor,
 } from "./constants";
 
@@ -69,5 +70,35 @@ describe("upload allowlists", () => {
     expect(UPLOAD_ACCEPT_ATTRIBUTE_NO_IMAGES).not.toContain(".png");
     // The no-images variant is for a model that cannot see; documents still work.
     expect(UPLOAD_ACCEPT_ATTRIBUTE_NO_IMAGES).toContain(".pdf");
+  });
+});
+
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+]);
+const GIF = new Uint8Array([
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0, 0, 0, 0, 0,
+]);
+const WEBP = new Uint8Array([
+  0x52, 0x49, 0x46, 0x46, 0x24, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+]);
+
+describe("sniffImageMime", () => {
+  it("reads the format from the magic bytes", () => {
+    expect(sniffImageMime(JPEG)).toBe("image/jpeg");
+    expect(sniffImageMime(PNG)).toBe("image/png");
+    expect(sniffImageMime(GIF)).toBe("image/gif");
+    expect(sniffImageMime(WEBP)).toBe("image/webp");
+  });
+
+  it("returns null for bytes it does not recognise", () => {
+    expect(sniffImageMime(new Uint8Array([1, 2, 3, 4]))).toBeNull();
+    // RIFF without the WEBP tag is some other RIFF container, not an image.
+    expect(
+      sniffImageMime(
+        new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x41, 0x56, 0x49, 0x20]),
+      ),
+    ).toBeNull();
   });
 });

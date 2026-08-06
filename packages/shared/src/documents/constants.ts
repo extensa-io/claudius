@@ -175,3 +175,33 @@ export function uploadContentTypeFor(filename: string): string {
   }
   return IMAGE_MIME_BY_EXTENSION[ext] ?? "text/plain";
 }
+
+/**
+ * The real image format, read from the file's magic bytes.
+ *
+ * The stored `mimeType` is derived from the filename extension, and extensions
+ * lie: a WebP saved as `.jpg` is common enough on the open web that the first
+ * live test hit one. Bedrock validates the declared media type against the
+ * actual bytes and rejects the mismatch, so the bytes have to be the source of
+ * truth for what we declare. Returns null for anything unrecognised, which the
+ * caller treats as "trust the stored type" rather than as an error.
+ */
+export function sniffImageMime(bytes: Uint8Array): string | null {
+  const startsWith = (...sig: number[]): boolean =>
+    sig.every((b, i) => bytes[i] === b);
+
+  if (startsWith(0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))
+    return "image/png";
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return "image/gif";
+  // RIFF....WEBP
+  if (
+    startsWith(0x52, 0x49, 0x46, 0x46) &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  )
+    return "image/webp";
+  return null;
+}

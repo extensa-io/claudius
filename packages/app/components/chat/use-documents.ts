@@ -4,6 +4,7 @@ import { upload } from "@vercel/blob/client";
 // Deep import (see composer.tsx): the barrel is not client-safe.
 import {
   classifyDocument,
+  sniffImageMime,
   uploadContentTypeFor,
 } from "@claudius/shared/documents/constants";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -60,9 +61,28 @@ export interface DocChip {
  * transparency, since flattening a screenshot's alpha channel to black is a
  * worse outcome than a slightly larger file.
  */
+/**
+ * The upload content type for a file, preferring what its first bytes say over
+ * what its extension claims. Extensions lie — a WebP downloaded as `.jpg` is
+ * ordinary on the open web — and the stored type has to match the bytes, since
+ * Bedrock cross-checks the two and rejects the mismatch. Non-images and
+ * unrecognised magic bytes fall back to the extension mapping.
+ */
+async function trueContentTypeFor(file: File): Promise<string> {
+  const byExtension = uploadContentTypeFor(file.name);
+  if (classifyDocument(file.name) !== "image") return byExtension;
+  try {
+    const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    return sniffImageMime(head) ?? byExtension;
+  } catch {
+    return byExtension;
+  }
+}
+
 async function downscaleImage(
   file: File,
   maxLongEdgePx: number,
+  sourceType: string,
 ): Promise<File> {
   try {
     const bitmap = await createImageBitmap(file);
@@ -83,7 +103,9 @@ async function downscaleImage(
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
 
-    const keepAlpha = file.type === "image/png" || file.type === "image/webp";
+    // Sniffed, not `file.type`: the browser derives that from the extension
+    // too, so a WebP named .jpg would lose its alpha channel to a JPEG re-encode.
+    const keepAlpha = sourceType === "image/png" || sourceType === "image/webp";
     const outType = keepAlpha ? "image/png" : "image/jpeg";
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob(resolve, outType, 0.9),
@@ -260,17 +282,22 @@ export function useDocuments({
       try {
         // Downscale to the tier's long-edge target BEFORE upload, so the
         // oversized bytes never occupy Blob storage or request bandwidth.
+        const sourceType = await trueContentTypeFor(file);
         const toUpload =
           isImage && imagePolicy
-            ? await downscaleImage(file, imagePolicy.maxLongEdgePx)
+            ? await downscaleImage(file, imagePolicy.maxLongEdgePx, sourceType)
             : file;
+        // A re-encode produced its own honest type; an untouched file keeps the
+        // sniffed one. Either way the declared type matches the stored bytes.
+        const contentType =
+          toUpload === file ? sourceType : uploadContentTypeFor(toUpload.name);
 
         const blob = await upload(toUpload.name, toUpload, {
           // Private store: documents must not be publicly fetchable by URL. The
           // parse pipeline reads them server-side with the SDK's authenticated get().
           access: "private",
           handleUploadUrl: "/api/blob/upload",
-          contentType: uploadContentTypeFor(toUpload.name),
+          contentType,
           onUploadProgress: ({ percentage }) =>
             patch(tmpId, { percentage }),
         });
