@@ -6,7 +6,17 @@ vi.mock("../db/collections", () => ({
   documentsCol: () => Promise.resolve({ find }),
 }));
 
-const { resolveTurnImages } = await import("./images");
+const blobGet = vi.fn();
+vi.mock("@vercel/blob", () => ({
+  get: (...args: unknown[]) => blobGet(...args),
+}));
+vi.mock("../env", () => ({
+  appEnv: () => ({ BLOB_READ_WRITE_TOKEN: "token" }),
+}));
+
+const { resolveTurnImages, hydrateTurnImages, sniffImageMime } = await import(
+  "./images"
+);
 
 /**
  * Resolving a turn's images is an ownership boundary (invariant #1): the filter
@@ -31,6 +41,64 @@ function doc(id: ObjectId, filename: string, mimeType = "image/jpeg") {
 
 beforeEach(() => {
   find.mockReset();
+  blobGet.mockReset();
+});
+
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0,
+]);
+const GIF = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0, 0, 0, 0, 0]);
+const WEBP = new Uint8Array([
+  0x52, 0x49, 0x46, 0x46, 0x24, 0, 0, 0, 0x57, 0x45, 0x42, 0x50,
+]);
+
+describe("sniffImageMime", () => {
+  it("reads the format from the magic bytes", () => {
+    expect(sniffImageMime(JPEG)).toBe("image/jpeg");
+    expect(sniffImageMime(PNG)).toBe("image/png");
+    expect(sniffImageMime(GIF)).toBe("image/gif");
+    expect(sniffImageMime(WEBP)).toBe("image/webp");
+  });
+
+  it("returns null for bytes it does not recognise", () => {
+    expect(sniffImageMime(new Uint8Array([1, 2, 3, 4]))).toBeNull();
+    // RIFF without the WEBP tag is some other RIFF container, not an image.
+    expect(
+      sniffImageMime(
+        new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x41, 0x56, 0x49, 0x20]),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("hydrateTurnImages", () => {
+  function mockBlob(bytes: Uint8Array): void {
+    blobGet.mockResolvedValue({
+      stream: new Response(bytes as unknown as BodyInit).body,
+    });
+  }
+
+  const image = {
+    id: "abc",
+    filename: "photo.jpg",
+    mimeType: "image/jpeg",
+    blobUrl: "https://blob.example/photo.jpg",
+  };
+
+  it("declares the type the BYTES say, not the one the extension claimed", async () => {
+    // A WebP downloaded as .jpg. Bedrock cross-checks the declared media type
+    // against the bytes and rejects the mismatch, so the bytes have to win.
+    mockBlob(WEBP);
+    const [out] = await hydrateTurnImages([image]);
+    expect(out?.mimeType).toBe("image/webp");
+  });
+
+  it("keeps the stored type when the bytes agree", async () => {
+    mockBlob(JPEG);
+    const [out] = await hydrateTurnImages([image]);
+    expect(out?.mimeType).toBe("image/jpeg");
+  });
 });
 
 describe("resolveTurnImages", () => {

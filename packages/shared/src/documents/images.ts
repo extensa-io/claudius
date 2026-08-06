@@ -94,6 +94,36 @@ function isSupportedImageMime(mimeType: string): boolean {
 }
 
 /**
+ * The real image format, read from the file's magic bytes.
+ *
+ * The stored `mimeType` is derived from the filename extension, and extensions
+ * lie: a WebP saved as `.jpg` is common enough on the open web that the first
+ * live test hit one. Bedrock validates the declared media type against the
+ * actual bytes and rejects the mismatch, so the bytes have to be the source of
+ * truth for what we declare. Returns null for anything unrecognised, which the
+ * caller treats as "trust the stored type" rather than as an error.
+ */
+export function sniffImageMime(bytes: Uint8Array): string | null {
+  const startsWith = (...sig: number[]): boolean =>
+    sig.every((b, i) => bytes[i] === b);
+
+  if (startsWith(0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (startsWith(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))
+    return "image/png";
+  if (startsWith(0x47, 0x49, 0x46, 0x38)) return "image/gif";
+  // RIFF....WEBP
+  if (
+    startsWith(0x52, 0x49, 0x46, 0x46) &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  )
+    return "image/webp";
+  return null;
+}
+
+/**
  * Fetch the bytes for a turn's images from Blob, base64-encoded for the content
  * block. Reads happen at invoke time and the result is deliberately never
  * stored: the whole point of the design is that these bytes exist only for the
@@ -112,6 +142,7 @@ export async function hydrateTurnImages(
   return Promise.all(
     images.map(async (image) => {
       let base64: string;
+      let mimeType = image.mimeType;
       try {
         // Private store, so the URL is not publicly fetchable — read it with the
         // SDK's authenticated get(), exactly as the parse pipeline does.
@@ -121,6 +152,8 @@ export async function hydrateTurnImages(
         if (bytes.byteLength > MAX_DOCUMENT_BYTES) {
           throw new Error("image exceeds the upload limit");
         }
+        const actual = sniffImageMime(new Uint8Array(bytes.slice(0, 12)));
+        if (actual && actual !== mimeType) mimeType = actual;
         base64 = Buffer.from(bytes).toString("base64");
       } catch (err) {
         console.error(
@@ -132,7 +165,7 @@ export async function hydrateTurnImages(
           `Could not read the attached image "${image.filename}". Try attaching it again.`,
         );
       }
-      return { ...image, base64 };
+      return { ...image, mimeType, base64 };
     }),
   );
 }
