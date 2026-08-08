@@ -37,18 +37,29 @@ interface Section {
   pageOrSection: string | null;
 }
 
+/**
+ * Advance the document's status, optionally recording the chunk count.
+ *
+ * `chunkCount` is written only on the terminal "embedded" transition and
+ * unset on every other one, for the same reason `failureReason` is: a retry
+ * deletes the previous attempt's chunks, so a count left over from it would
+ * describe rows that no longer exist.
+ */
 async function setStatus(
   documentId: ObjectId,
   status: DocumentRecord["status"],
-  failureReason?: string,
+  options: { failureReason?: string; chunkCount?: number } = {},
 ): Promise<void> {
+  const { failureReason, chunkCount } = options;
   const col = await documentsCol();
   await col.updateOne(
     { _id: documentId },
     failureReason !== undefined
-      ? { $set: { status, failureReason } }
-      : // Clear any prior failure reason on a successful transition / retry.
-        { $set: { status }, $unset: { failureReason: "" } },
+      ? { $set: { status, failureReason }, $unset: { chunkCount: "" } }
+      : chunkCount !== undefined
+        ? { $set: { status, chunkCount }, $unset: { failureReason: "" } }
+        : // Clear any prior failure reason on a successful transition / retry.
+          { $set: { status }, $unset: { failureReason: "", chunkCount: "" } },
   );
 }
 
@@ -178,12 +189,12 @@ export async function parseAndEmbedDocument(
     await col.deleteMany({ documentId });
     await col.insertMany(chunks);
 
-    await setStatus(documentId, "embedded");
+    await setStatus(documentId, "embedded", { chunkCount: chunks.length });
     return "embedded";
   } catch (err) {
     const reason =
       err instanceof Error ? err.message : "Parsing failed unexpectedly.";
-    await setStatus(documentId, "failed", reason);
+    await setStatus(documentId, "failed", { failureReason: reason });
     return "failed";
   }
 }
