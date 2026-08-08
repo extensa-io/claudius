@@ -46,6 +46,15 @@ import type { ClaudiusUIMessage } from "./types";
  * exactly as the redirect record is, so history survives reload.
  */
 
+/**
+ * Appended to a partial entry when the provider drops the stream mid-entry, so
+ * the user understands the entry is incomplete rather than assuming the
+ * dictionary had little to say. Bilingual because the entry itself is written in
+ * whichever language was looked up.
+ */
+const TRUNCATION_NOTICE =
+  "\n\n---\n\n*This entry was cut short by a provider error. Try the lookup again. / Esta entrada se interrumpió por un error del proveedor. Inténtalo de nuevo.*";
+
 /** The subset of LangChain's usage_metadata we record. */
 interface UsageMetadata {
   input_tokens?: number;
@@ -164,24 +173,63 @@ export async function handleDictionaryTurn(params: {
         let started = false;
         let gathered: AIMessageChunk | undefined;
         let assistantText = "";
-        for await (const chunk of chunks) {
-          gathered = gathered === undefined ? chunk : gathered.concat(chunk);
-          const delta = chunk.text ?? "";
-          if (delta.length > 0) {
-            if (!started) {
-              writer.write({ type: "text-start", id: textId });
-              started = true;
+        // Bedrock can drop a streaming Converse call mid-generation: the
+        // InternalServerException arrives as an event inside the open stream,
+        // so the SDK's pre-response retries never see it. Whatever already
+        // streamed is text the user watched arrive and output we were billed
+        // for, so salvage it instead of unwinding the turn.
+        let streamError: unknown = null;
+        try {
+          for await (const chunk of chunks) {
+            gathered = gathered === undefined ? chunk : gathered.concat(chunk);
+            const delta = chunk.text ?? "";
+            if (delta.length > 0) {
+              if (!started) {
+                writer.write({ type: "text-start", id: textId });
+                started = true;
+              }
+              writer.write({ type: "text-delta", id: textId, delta });
+              assistantText += delta;
             }
-            writer.write({ type: "text-delta", id: textId, delta });
-            assistantText += delta;
           }
+        } catch (error) {
+          streamError = error;
+          const cause = (error as { cause?: unknown }).cause;
+          console.error(
+            "Dictionary stream truncated:",
+            error instanceof Error ? `${error.name}: ${error.message}` : error,
+            // The provider exception name (InternalServerException,
+            // ServiceUnavailableException) usually hides in the cause, and it
+            // is the part worth having in the logs.
+            cause instanceof Error ? `(cause ${cause.name})` : "",
+            `after ${assistantText.length} chars`,
+          );
         }
+
+        const truncated = streamError !== null;
+
+        // Nothing usable arrived, so there is no partial turn worth keeping:
+        // surface the failure to the client exactly as before.
+        if (truncated && assistantText.trim().length === 0) throw streamError;
+
+        // An abort is the user's own doing (stop button, navigation), so the
+        // partial entry is kept without editorializing. A provider failure is
+        // not obvious from the text alone, so say so inline.
+        if (truncated && !signal.aborted) {
+          const notice = TRUNCATION_NOTICE;
+          writer.write({ type: "text-delta", id: textId, delta: notice });
+          assistantText += notice;
+        }
+
         if (started) writer.write({ type: "text-end", id: textId });
         const latencyMs = Date.now() - startedAt;
         entry = assistantText;
 
         // One usage_events row per turn (invariant #3). Usage comes off the
-        // concatenated final chunk (streamUsage: true on the model).
+        // concatenated final chunk (streamUsage: true on the model). A
+        // truncated stream never delivers that final chunk, so the counts fall
+        // back to 0 — the row still exists so the turn is auditable, it just
+        // undercounts rather than inventing an estimate.
         const usage = gathered?.usage_metadata as UsageMetadata | undefined;
         await writeUsageEvent({
           userId,
@@ -195,9 +243,15 @@ export async function handleDictionaryTurn(params: {
         });
 
         // Cache the entry so the next lookup of this term is free. Content-only
-        // and global — no userId enters the store (invariant #1).
-        if (entry.trim().length > 0) {
-          await store.set(key, { markdown: entry, sourceLang }, DICTIONARY_TTL_SECONDS);
+        // and global — no userId enters the store (invariant #1). A truncated
+        // entry is never cached: a 30-day TTL would otherwise serve one bad
+        // stream to every future lookup of the term, for free, forever.
+        if (!truncated && entry.trim().length > 0) {
+          await store.set(
+            key,
+            { markdown: entry, sourceLang },
+            DICTIONARY_TTL_SECONDS,
+          );
         }
       }
 
