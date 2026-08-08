@@ -13,7 +13,7 @@ const settingsUpdateOne = vi.fn();
 
 vi.mock("../db/client", () => ({
   getDb: vi.fn(async () => ({})),
-  clientPromise: Promise.resolve({}),
+  getClient: () => Promise.resolve({}),
   DB_NAME: "claudius",
 }));
 vi.mock("../db/collections", () => ({

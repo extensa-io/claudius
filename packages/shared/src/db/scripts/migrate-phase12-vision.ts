@@ -1,4 +1,4 @@
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { settingsCol } from "../collections";
 import type { TierImagePolicy } from "../schemas";
 
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
     console.log(`  ${String(entry.id)}: supportsImages=${entry.supportsImages}`);
   }
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
   console.log("Phase 12 migration complete.");
 }

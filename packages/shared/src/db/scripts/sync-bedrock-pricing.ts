@@ -2,7 +2,7 @@ import {
   GetProductsCommand,
   PricingClient,
 } from "@aws-sdk/client-pricing";
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { updateModelCatalog } from "../../admin/settings";
 import { loadModelCatalog } from "../../tiers/catalog";
 import type { ModelCatalogEntry } from "../schemas";
@@ -164,7 +164,7 @@ async function main(): Promise<void> {
     console.log("No catalog entries updated. Set prices manually in /admin.");
   }
 
-  const mongo = await clientPromise;
+  const mongo = await getClient();
   await mongo.close();
   console.log("Pricing sync complete.");
 }

@@ -1,7 +1,7 @@
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import { DB_NAME } from "@claudius/shared";
 import NextAuth from "next-auth";
-import { clientPromise } from "../mongo";
+import { getClient } from "../mongo";
 import { authConfig } from "./config";
 
 /**
@@ -14,6 +14,6 @@ import { authConfig } from "./config";
  * same "claudius" database.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: MongoDBAdapter(clientPromise, { databaseName: DB_NAME }),
+  adapter: MongoDBAdapter(getClient, { databaseName: DB_NAME }),
   ...authConfig,
 });

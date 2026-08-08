@@ -6,7 +6,7 @@
  *
  *   tsx --env-file=../../.env src/db/scripts/set-importance.ts <email> <substring> <importance>
  */
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { memoriesCol, usersCol } from "../collections";
 
 function escapeRegex(input: string): string {
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
     await col.updateMany(filter, { $set: { importance } });
   }
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
 }
 

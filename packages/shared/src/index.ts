@@ -10,7 +10,7 @@ export {
   type AppEnv,
 } from "./env";
 export { AppError, type AppErrorCode, isAppError } from "./errors";
-export { clientPromise, getDb, DB_NAME } from "./db/client";
+export { getClient, getDb, DB_NAME } from "./db/client";
 export * from "./db/collections";
 export * from "./db/schemas";
 export { applyIndexes } from "./db/indexes";

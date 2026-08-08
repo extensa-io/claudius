@@ -1,4 +1,4 @@
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { settingsCol } from "../collections";
 import {
   type AdminAllowlistSettings,
@@ -171,7 +171,7 @@ async function main(): Promise<void> {
     console.log(`  settings.${_id}: ${action}`);
   }
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
   console.log("Seed complete.");
 }

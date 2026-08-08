@@ -1,4 +1,4 @@
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { settingsCol, usersCol } from "../collections";
 
 /**
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
     `users.memoryEnabled backfill: ${usersResult.modifiedCount} updated`,
   );
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
   console.log("Phase 3 migration complete.");
 }

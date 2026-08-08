@@ -1,4 +1,4 @@
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { settingsCol } from "../collections";
 
 /**
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
     }`,
   );
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
   console.log("Phase 4 migration complete.");
 }

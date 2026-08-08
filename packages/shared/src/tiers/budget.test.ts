@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../db/client", () => ({
   getDb: vi.fn(async () => ({})),
-  clientPromise: Promise.resolve({}),
+  getClient: () => Promise.resolve({}),
   DB_NAME: "claudius",
 }));
 

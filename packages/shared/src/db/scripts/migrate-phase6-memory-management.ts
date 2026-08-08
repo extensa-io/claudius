@@ -1,4 +1,4 @@
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { memoriesCol, usersCol } from "../collections";
 import { reclassifyUserMemories } from "../../memory/reclassify";
 
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     `Neutral-backfilled ${fallback.modifiedCount} remaining memories to importance 0.5.`,
   );
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
   console.log("Phase 6 migration complete.");
 }

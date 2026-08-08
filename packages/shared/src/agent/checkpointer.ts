@@ -1,5 +1,5 @@
 import { MongoDBSaver } from "@langchain/langgraph-checkpoint-mongodb";
-import { clientPromise, DB_NAME } from "../db/client";
+import { getClient, DB_NAME } from "../db/client";
 
 /**
  * The LangGraph checkpointer, backed by the same MongoDB client the rest of the
@@ -16,7 +16,7 @@ const globalForCheckpointer = globalThis as unknown as {
 };
 
 async function createCheckpointer(): Promise<MongoDBSaver> {
-  const client = await clientPromise;
+  const client = await getClient();
   return new MongoDBSaver({ client, dbName: DB_NAME });
 }
 

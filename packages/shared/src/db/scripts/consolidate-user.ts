@@ -7,7 +7,7 @@
  *
  *   tsx --env-file=../../.env src/db/scripts/consolidate-user.ts <email>
  */
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { usersCol } from "../collections";
 import { consolidateUserMemories } from "../../memory/consolidate";
 
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   const summary = await consolidateUserMemories({ user });
   console.log(JSON.stringify(summary, null, 2));
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
 }
 

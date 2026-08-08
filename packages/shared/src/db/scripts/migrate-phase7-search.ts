@@ -1,4 +1,4 @@
-import { clientPromise } from "../client";
+import { getClient } from "../client";
 import { settingsCol } from "../collections";
 import type { SearchSettings } from "../schemas";
 import { utcMonthMarker } from "../../tiers/catalog";
@@ -65,7 +65,7 @@ async function main(): Promise<void> {
     );
   }
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
   console.log("Phase 7 migration complete.");
 }

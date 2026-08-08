@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 // Mongo connection during unit tests.
 vi.mock("../db/client", () => ({
   getDb: vi.fn(async () => ({})),
-  clientPromise: Promise.resolve({}),
+  getClient: () => Promise.resolve({}),
   DB_NAME: "claudius",
 }));
 

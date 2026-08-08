@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 // aggregate.ts imports the db layer (eager-connecting client) transitively.
 vi.mock("../db/client", () => ({
   getDb: vi.fn(async () => ({})),
-  clientPromise: Promise.resolve({}),
+  getClient: () => Promise.resolve({}),
   DB_NAME: "claudius",
 }));
 

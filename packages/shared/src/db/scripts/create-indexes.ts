@@ -1,4 +1,4 @@
-import { clientPromise, getDb } from "../client";
+import { getClient, getDb } from "../client";
 import { applyIndexes } from "../indexes";
 
 /**
@@ -12,7 +12,7 @@ async function main(): Promise<void> {
   if (created.length > 0) console.log(`  created/ensured: ${created.join(", ")}`);
   if (skipped.length > 0) console.log(`  skipped (already present): ${skipped.join(", ")}`);
 
-  const client = await clientPromise;
+  const client = await getClient();
   await client.close();
 }
 
