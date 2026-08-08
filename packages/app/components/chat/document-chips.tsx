@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  CircleAlert,
-  FileText,
-  Loader2,
-  RefreshCw,
-  X,
-} from "lucide-react";
+import { CircleAlert, FileText, Loader2, RefreshCw, X } from "lucide-react";
 import type { ChipStatus, DocChip } from "./use-documents";
 
 /**
@@ -34,7 +28,9 @@ function StatusIcon({ status }: { status: ChipStatus }): React.ReactNode {
   if (status === "embedded" || status === "ready") {
     return <FileText className="size-3.5 shrink-0 text-primary" />;
   }
-  return <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />;
+  return (
+    <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+  );
 }
 
 export function DocumentChips({
@@ -53,45 +49,55 @@ export function DocumentChips({
       {chips.map((chip) => (
         <div
           key={chip.id}
-          className="flex max-w-full items-center gap-2 rounded-md border border-border bg-card px-2 py-1 text-xs"
-          title={chip.failureReason ?? chip.filename}
+          className="flex max-w-full flex-col rounded-md border border-border bg-card px-2 py-1 text-xs"
+          title={chip.filename}
         >
-          {chip.isImage && chip.previewUrl ? (
-            // A thumbnail says more than a filename about what is attached, and
-            // it is free: the object URL is the local file the user just picked.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={chip.previewUrl}
-              alt=""
-              className="size-6 shrink-0 rounded-sm object-cover"
-            />
-          ) : (
-            <StatusIcon status={chip.status} />
-          )}
-          <span className="truncate font-medium">{chip.filename}</span>
-          <span className="shrink-0 text-muted-foreground">
-            {chip.status === "uploading" && chip.percentage !== undefined
-              ? `${chip.percentage}%`
-              : STATUS_LABEL[chip.status]}
-          </span>
-          {chip.status === "failed" && (
+          <div className="flex max-w-full items-center gap-2">
+            {chip.isImage && chip.previewUrl ? (
+              // A thumbnail says more than a filename about what is attached, and
+              // it is free: the object URL is the local file the user just picked.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={chip.previewUrl}
+                alt=""
+                className="size-6 shrink-0 rounded-sm object-cover"
+              />
+            ) : (
+              <StatusIcon status={chip.status} />
+            )}
+            <span className="truncate font-medium">{chip.filename}</span>
+            <span className="shrink-0 text-muted-foreground">
+              {chip.status === "uploading" && chip.percentage !== undefined
+                ? `${chip.percentage}%`
+                : STATUS_LABEL[chip.status]}
+            </span>
+            {chip.status === "failed" && (
+              <button
+                type="button"
+                aria-label="Retry"
+                onClick={() => onRetry(chip.id)}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw className="size-3.5" />
+              </button>
+            )}
             <button
               type="button"
-              aria-label="Retry"
-              onClick={() => onRetry(chip.id)}
+              aria-label="Remove"
+              onClick={() => onRemove(chip.id)}
               className="shrink-0 text-muted-foreground hover:text-foreground"
             >
-              <RefreshCw className="size-3.5" />
+              <X className="size-3.5" />
             </button>
+          </div>
+          {/* The reason has to be on the page, not in a title tooltip: there is
+              no hover on touch, so a tooltip-only message makes every mobile
+              failure look like a bare "Failed" with nothing to act on. */}
+          {chip.status === "failed" && chip.failureReason && (
+            <p className="mt-0.5 max-w-[16rem] text-pretty text-destructive">
+              {chip.failureReason}
+            </p>
           )}
-          <button
-            type="button"
-            aria-label="Remove"
-            onClick={() => onRemove(chip.id)}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
         </div>
       ))}
     </div>
