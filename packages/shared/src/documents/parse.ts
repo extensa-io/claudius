@@ -66,7 +66,9 @@ async function fetchBytes(url: string): Promise<ArrayBuffer> {
   }
   const buf = await new Response(result.stream).arrayBuffer();
   if (buf.byteLength > MAX_DOCUMENT_BYTES) {
-    throw new Error("File exceeds the 20 MB limit.");
+    throw new Error(
+      `File exceeds the ${Math.round(MAX_DOCUMENT_BYTES / (1024 * 1024))} MB limit.`,
+    );
   }
   return buf;
 }

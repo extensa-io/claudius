@@ -31,10 +31,11 @@ describe("sizeBucketOf", () => {
     expect(sizeBucketOf(500)).toBe("<1MB");
     expect(sizeBucketOf(3 * 1024 * 1024)).toBe("1-5MB");
     expect(sizeBucketOf(19 * 1024 * 1024)).toBe("10-20MB");
+    expect(sizeBucketOf(25 * 1024 * 1024)).toBe("20-30MB");
   });
 
-  it("flags a file past the 20MB document cap", () => {
-    expect(sizeBucketOf(21 * 1024 * 1024)).toBe(">20MB");
+  it("flags a file past the 30MB document cap", () => {
+    expect(sizeBucketOf(31 * 1024 * 1024)).toBe(">30MB");
   });
 });
 

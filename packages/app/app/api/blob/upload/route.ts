@@ -15,7 +15,7 @@ export const runtime = "nodejs";
  * Issues short-lived client upload tokens for Vercel Blob. The browser uploads
  * file bytes straight to Blob with this token, never through a function body —
  * which is structural, not an optimization: a route body is capped at 4.5MB and
- * documents here go to 20MB.
+ * documents here go to 30MB.
  *
  * The DB record is created by the client's follow-up call to POST /api/documents
  * once `upload()` resolves, NOT by Vercel Blob's `onUploadCompleted` webhook. The

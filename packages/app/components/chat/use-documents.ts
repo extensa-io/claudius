@@ -79,7 +79,7 @@ export interface DocChip {
  * The over-the-limit message for a file, or null if it fits.
  *
  * Blob enforces the same cap at the far end, but only once the upload is under
- * way, and it answers with its own byte count ("cannot be greater than 20971520
+ * way, and it answers with its own byte count ("cannot be greater than 31457280
  * bytes") which tells the user nothing they can act on. Checking here costs
  * nothing and lets us say which file, how big it is, and what the limit is.
  */

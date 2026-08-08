@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  * function of ours.
  *
  * Uploads are the reason this exists. Bytes go straight from the browser to
- * Vercel Blob so a 20MB file never meets the 4.5MB route body limit, which means
+ * Vercel Blob so a 30MB file never meets the 4.5MB route body limit, which means
  * a failed upload runs no server code and leaves no trace in the logs: the user
  * sees "Failed" and we see nothing at all.
  *

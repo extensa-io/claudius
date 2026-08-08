@@ -7,7 +7,7 @@
  */
 
 /** Hard upload ceiling. Enforced at the Blob token and again before parsing. */
-export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024; // 20 MB
+export const MAX_DOCUMENT_BYTES = 30 * 1024 * 1024; // 30 MB
 
 /**
  * Cap on chunks per document. Two jobs: a defensive ceiling against pathological

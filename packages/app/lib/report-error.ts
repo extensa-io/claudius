@@ -14,7 +14,8 @@ export function sizeBucketOf(bytes: number): string {
   if (mb < 5) return "1-5MB";
   if (mb < 10) return "5-10MB";
   if (mb < 20) return "10-20MB";
-  return ">20MB";
+  if (mb < 30) return "20-30MB";
+  return ">30MB";
 }
 
 /** The extension alone, lowercased, never the filename (invariant #5). */
