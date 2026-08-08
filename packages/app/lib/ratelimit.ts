@@ -10,6 +10,10 @@ import { AppError, checkRateLimit } from "@claudius/shared";
 const LIMITS = {
   chat: { limit: 20, windowMs: 60_000 },
   upload: { limit: 10, windowMs: 60_000 },
+  // Client error reports. A broken page can loop, so this is the one bucket
+  // whose job is to cap our own log volume rather than to stop a user: over the
+  // limit the report is dropped silently, never surfaced.
+  clientError: { limit: 20, windowMs: 60_000 },
 } as const;
 
 export type RateLimitKey = keyof typeof LIMITS;

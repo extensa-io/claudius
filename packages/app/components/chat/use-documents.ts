@@ -1,6 +1,12 @@
 "use client";
 
 import { upload } from "@vercel/blob/client";
+import {
+  extensionOf,
+  messageOf,
+  reportClientError,
+  sizeBucketOf,
+} from "@/lib/report-error";
 // Deep import (see composer.tsx): the barrel is not client-safe.
 import {
   classifyDocument,
@@ -351,10 +357,18 @@ export function useDocuments({
         // to chunk or embed (Phase 12).
         if (!isImage) await runParse(document.id);
       } catch (err) {
+        // The upload runs entirely in the browser, so without this the failure
+        // leaves no trace on the server at all — see /api/client-errors.
+        reportClientError({
+          stage: "upload",
+          message: messageOf(err),
+          extension: extensionOf(file.name),
+          sizeBucket: sizeBucketOf(file.size),
+          stack: err instanceof Error ? (err.stack ?? null) : null,
+        });
         patch(tmpId, {
           status: "failed",
-          failureReason:
-            err instanceof Error ? err.message : "Upload failed.",
+          failureReason: err instanceof Error ? err.message : "Upload failed.",
         });
       }
     },

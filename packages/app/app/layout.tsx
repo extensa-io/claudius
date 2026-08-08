@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ export default function RootLayout({
       className={cn(geistSans.variable, geistMono.variable)}
     >
       <body className="font-sans antialiased">
+        <ClientErrorReporter />
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
