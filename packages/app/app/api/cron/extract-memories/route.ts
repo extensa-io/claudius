@@ -2,8 +2,8 @@ import type { NextRequest } from "next/server";
 import { appEnv } from "@claudius/shared";
 import { enqueueAllStale } from "@/lib/memory/enqueue";
 
-// Mongo needs the Node runtime. maxDuration is the Hobby ceiling; this route only
-// enqueues jobs now (Phase 5), which is cheap, so the batch can be large.
+// Mongo needs the Node runtime. This route only enqueues jobs now (Phase 5),
+// which is cheap, so 60s is ample and the batch can be large.
 export const runtime = "nodejs";
 export const maxDuration = 60;
 

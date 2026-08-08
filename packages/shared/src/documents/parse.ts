@@ -153,7 +153,7 @@ export async function parseAndEmbedDocument(
     }
     // Fail fast and gracefully *before* the slow embedding step, so an oversized
     // file returns a clear message rather than being killed by the function
-    // timeout. This is the Hobby-plan budget guard (see MAX_CHUNKS_PER_DOCUMENT).
+    // timeout. This is the function time-budget guard (see MAX_CHUNKS_PER_DOCUMENT).
     if (chunked.length > MAX_CHUNKS_PER_DOCUMENT) {
       throw new Error(
         "This file is too large to process on the current plan. Try splitting it into smaller files.",

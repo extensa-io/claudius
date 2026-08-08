@@ -5,13 +5,13 @@ import { auth } from "@/lib/auth";
 import { getOwnedDocument, toDocumentView } from "@/lib/documents";
 import { errorResponse } from "@/lib/http";
 
-// Parsing fetches the file, extracts text, and embeds every chunk. 60s is the
-// Vercel Hobby ceiling; we size the chunk cap (see MAX_CHUNKS_PER_DOCUMENT) so a
-// normal document finishes well inside it and an oversized one fails fast and
-// gracefully before the slow embedding step. Phase 4's worker removes this
-// constraint by taking ingestion off the request path; raise this to 300 then.
+// Parsing fetches the file, extracts text, and embeds every chunk. 300s is the
+// Vercel Pro default ceiling; we size the chunk cap (see MAX_CHUNKS_PER_DOCUMENT)
+// so a normal document finishes well inside it and an oversized one fails fast
+// and gracefully before the slow embedding step. Phase 4's worker removes this
+// constraint entirely by taking ingestion off the request path.
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 interface RouteContext {
   params: Promise<{ id: string }>;

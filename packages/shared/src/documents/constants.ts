@@ -12,14 +12,20 @@ export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024; // 20 MB
 /**
  * Cap on chunks per document. Two jobs: a defensive ceiling against pathological
  * files (a huge spreadsheet dumped to text, a minified bundle), and the lever
- * that keeps a parse inside the Vercel Hobby 60s function window — embedding is
- * the slow step, and the chunk count is known cheaply *before* embedding, so a
- * file that would exceed the budget fails fast with a clear message instead of
- * being killed mid-embed by a timeout. ~600 chunks comfortably embeds in well
- * under 60s; a normal 50-page PDF is a few hundred. Raise this once the Phase 4
- * worker takes ingestion off the request path.
+ * that keeps a parse inside the function's time budget. Embedding is the slow
+ * step, and the chunk count is known cheaply *before* embedding, so a file that
+ * would exceed the budget fails fast with a clear message instead of being
+ * killed mid-embed by a timeout.
+ *
+ * 2000 chunks is roughly 2M characters, on the order of several hundred pages of
+ * prose; a normal 50-page PDF is a few hundred chunks. Sized against the parse
+ * route's 300s budget (Vercel Pro) with deliberate headroom rather than scaled
+ * to fill it, because embedding latency is the variable here and the same
+ * request still has to fetch the bytes, extract text, and insert the chunks.
+ * The Phase 4 worker removes the ceiling entirely by taking ingestion off the
+ * request path.
  */
-export const MAX_CHUNKS_PER_DOCUMENT = 600;
+export const MAX_CHUNKS_PER_DOCUMENT = 2000;
 
 /**
  * How a file is handled. Source code is parsed identically to plain text.

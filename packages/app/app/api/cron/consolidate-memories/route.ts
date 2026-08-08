@@ -2,8 +2,8 @@ import type { NextRequest } from "next/server";
 import { appEnv } from "@claudius/shared";
 import { enqueueAllConsolidation } from "@/lib/memory/consolidate";
 
-// Mongo needs the Node runtime. Enqueue-only, so it's cheap and fits the Hobby
-// ceiling even across every eligible user.
+// Mongo needs the Node runtime. Enqueue-only, so it is cheap and fits 60s even
+// across every eligible user.
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
