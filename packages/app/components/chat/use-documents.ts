@@ -10,6 +10,7 @@ import {
 // Deep import (see composer.tsx): the barrel is not client-safe.
 import {
   classifyDocument,
+  MAX_DOCUMENT_BYTES,
   sniffImageMime,
   uploadContentTypeFor,
 } from "@claudius/shared/documents/constants";
@@ -74,6 +75,20 @@ export interface DocChip {
  * Bedrock cross-checks the two and rejects the mismatch. Non-images and
  * unrecognised magic bytes fall back to the extension mapping.
  */
+/**
+ * The over-the-limit message for a file, or null if it fits.
+ *
+ * Blob enforces the same cap at the far end, but only once the upload is under
+ * way, and it answers with its own byte count ("cannot be greater than 20971520
+ * bytes") which tells the user nothing they can act on. Checking here costs
+ * nothing and lets us say which file, how big it is, and what the limit is.
+ */
+function overSizeLimit(bytes: number): string | null {
+  if (bytes <= MAX_DOCUMENT_BYTES) return null;
+  const mb = (n: number): string => `${Math.round(n / (1024 * 1024))}MB`;
+  return `This file is ${mb(bytes)}. The limit is ${mb(MAX_DOCUMENT_BYTES)}.`;
+}
+
 async function trueContentTypeFor(file: File): Promise<string> {
   const byExtension = uploadContentTypeFor(file.name);
   if (classifyDocument(file.name) !== "image") return byExtension;
@@ -274,6 +289,18 @@ export function useDocuments({
         return;
       }
 
+      // Size is checked here for anything that isn't an image, and again after
+      // the resize for images: an oversized photo is usually well under the cap
+      // once downscaled, so refusing it on its original size would reject files
+      // that were always going to be fine.
+      if (!isImage) {
+        const tooLarge = overSizeLimit(file.size);
+        if (tooLarge) {
+          patch(tmpId, { status: "failed", failureReason: tooLarge });
+          return;
+        }
+      }
+
       // Guard the picker's accept filter with a policy check: an image dragged
       // in on a role with no image service (or with the policy absent) is
       // refused here rather than at the far end of an upload.
@@ -297,6 +324,14 @@ export function useDocuments({
         // sniffed one. Either way the declared type matches the stored bytes.
         const contentType =
           toUpload === file ? sourceType : uploadContentTypeFor(toUpload.name);
+
+        // An image that is still over the cap after downscaling (or that failed
+        // to resize at all) is refused here, before any bytes are sent.
+        const tooLarge = overSizeLimit(toUpload.size);
+        if (tooLarge) {
+          patch(tmpId, { status: "failed", failureReason: tooLarge });
+          return;
+        }
 
         const blob = await upload(toUpload.name, toUpload, {
           // Private store: documents must not be publicly fetchable by URL. The
