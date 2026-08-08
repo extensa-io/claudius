@@ -11,7 +11,7 @@ export const runtime = "nodejs";
  *
  * Uploads are the reason this exists. Bytes go straight from the browser to
  * Vercel Blob so a 20MB file never meets the 4.5MB route body limit, which means
- * a failed upload runs no server code and leaves no trace in the logs — the user
+ * a failed upload runs no server code and leaves no trace in the logs: the user
  * sees "Failed" and we see nothing at all.
  *
  * Deliberately a log line and not a collection: this is diagnostic breadcrumbs,
@@ -29,6 +29,10 @@ const ReportSchema = z.object({
   // Set when the browser gave us a stack; trimmed hard since we only want the
   // top frames to identify the code path.
   stack: z.string().max(1000).nullish(),
+  // How many times this exact error had happened on the page when the report
+  // was sent. Present only on a repeat: the client reports repeats on a
+  // doubling curve, so "occurrence: 64" means a loop, not 64 log lines.
+  occurrence: z.number().int().positive().nullish(),
 });
 
 export async function POST(request: Request): Promise<Response> {
@@ -46,7 +50,8 @@ export async function POST(request: Request): Promise<Response> {
 
     const parsed = ReportSchema.safeParse(await request.json());
     if (!parsed.success) return noContent;
-    const { stage, message, extension, sizeBucket, stack } = parsed.data;
+    const { stage, message, extension, sizeBucket, stack, occurrence } =
+      parsed.data;
 
     // The user id (not email) is enough to correlate with other log lines while
     // keeping an identifier out of the log stream.
@@ -54,6 +59,7 @@ export async function POST(request: Request): Promise<Response> {
       stage,
       message,
       userId: user.id,
+      ...(occurrence ? { occurrence } : {}),
       ...(extension ? { extension } : {}),
       ...(sizeBucket ? { sizeBucket } : {}),
       ...(stack ? { stack } : {}),

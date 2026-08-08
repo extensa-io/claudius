@@ -8,7 +8,7 @@ import { messageOf, reportClientError } from "@/lib/report-error";
  * Mounted once in the root layout; renders nothing.
  *
  * Both listeners are needed and they don't overlap: "error" covers synchronous
- * throws, "unhandledrejection" covers a rejected promise nobody awaited — which
+ * throws, "unhandledrejection" covers a rejected promise nobody awaited, which
  * is the shape most async failures in this app actually take.
  */
 export function ClientErrorReporter(): null {

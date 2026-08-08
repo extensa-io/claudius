@@ -17,7 +17,7 @@ export function sizeBucketOf(bytes: number): string {
   return ">20MB";
 }
 
-/** The extension alone, lowercased — never the filename (invariant #5). */
+/** The extension alone, lowercased, never the filename (invariant #5). */
 export function extensionOf(filename: string): string | null {
   const dot = filename.lastIndexOf(".");
   if (dot <= 0 || dot === filename.length - 1) return null;
@@ -32,17 +32,49 @@ export type ClientErrorReport = {
   stack?: string | null;
 };
 
+/**
+ * Volume guards, both scoped to one page load.
+ *
+ * A looping render or a throwing interval emits errors as fast as the event
+ * loop turns, and the server-side rate limit can't help: it caps what gets
+ * logged, not what the browser sends, so the requests are already in flight
+ * when the route drops them. That matters because keepalive requests draw on a
+ * 64KiB budget shared across everything in flight for the page, and a fetch
+ * that would exceed it is rejected outright rather than truncated. Reporting
+ * would go silently dark exactly when something is badly wrong.
+ *
+ * So: a hard ceiling per page load, and repeats of an identical error reported
+ * on a doubling curve (1st, 2nd, 4th, 8th...) carrying their occurrence count.
+ * The count is what makes a loop legible in the logs without printing it 300
+ * times.
+ */
+const MAX_REPORTS_PER_PAGE = 20;
+const seen = new Map<string, number>();
+let sent = 0;
+
 export function reportClientError(report: ClientErrorReport): void {
   if (typeof window === "undefined") return;
+  if (sent >= MAX_REPORTS_PER_PAGE) return;
 
+  const message = report.message.slice(0, 300);
+  const key = `${report.stage}|${message}`;
+  const occurrence = (seen.get(key) ?? 0) + 1;
+  seen.set(key, occurrence);
+
+  // A power of two, which is also true of the first occurrence.
+  const isMilestone = (occurrence & (occurrence - 1)) === 0;
+  if (!isMilestone) return;
+
+  sent += 1;
   const body = JSON.stringify({
     ...report,
-    message: report.message.slice(0, 300),
+    message,
+    ...(occurrence > 1 ? { occurrence } : {}),
     ...(report.stack ? { stack: report.stack.slice(0, 1000) } : {}),
   });
 
   // keepalive so a report sent while the page is being torn down still leaves
-  // the browser — the unhandled-error case is exactly when navigation follows.
+  // the browser: the unhandled-error case is exactly when navigation follows.
   void fetch("/api/client-errors", {
     method: "POST",
     headers: { "content-type": "application/json" },
