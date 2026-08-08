@@ -43,14 +43,24 @@ export const authConfig = {
       // enforcement layer already reads the user fresh, so this only closes the
       // UI/gating gap where the token would otherwise carry a stale role.
       if (token.uid) {
-        const users = await usersCol();
-        const current = await users.findOne(
-          { _id: new ObjectId(token.uid) },
-          { projection: { role: 1, status: 1 } },
-        );
-        if (current) {
-          token.role = current.role;
-          token.status = current.status;
+        try {
+          const users = await usersCol();
+          const current = await users.findOne(
+            { _id: new ObjectId(token.uid) },
+            { projection: { role: 1, status: 1 } },
+          );
+          if (current) {
+            token.role = current.role;
+            token.status = current.status;
+          }
+        } catch {
+          // A failed refresh must not destroy a valid session. Throwing here
+          // makes Auth.js discard the token as a JWTSessionError, so a database
+          // blip signs the user out of every route at once — including ones
+          // that never needed the database. Keep the role and status already on
+          // the token instead: they are only the UI/gating hint, and invariant
+          // #3 has the enforcement layer read the user fresh before any model
+          // call, where an unreachable database fails closed on its own.
         }
       }
       return token;
