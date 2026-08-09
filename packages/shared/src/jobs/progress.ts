@@ -58,6 +58,12 @@ export async function failJob(jobId: ObjectId, error: string): Promise<void> {
 /**
  * Whether a job has been cancelled. The worker calls this between steps so a
  * cancel lands within one step (the acceptance bar). One projected read.
+ *
+ * A job that has VANISHED counts as cancelled. Deleting a conversation removes
+ * its jobs, and a research run already in flight would otherwise finish and
+ * append its report to a thread the user deleted — recreating checkpoints that
+ * no conversation points at. Nothing else deletes a job mid-run, so treating
+ * "gone" as "stop" has no other caller to surprise.
  */
 export async function isJobCancelled(jobId: ObjectId): Promise<boolean> {
   const col = await jobsCol();
@@ -65,5 +71,5 @@ export async function isJobCancelled(jobId: ObjectId): Promise<boolean> {
     { _id: jobId },
     { projection: { status: 1 } },
   );
-  return doc?.status === "cancelled";
+  return doc === null || doc.status === "cancelled";
 }

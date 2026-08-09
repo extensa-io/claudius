@@ -1,6 +1,15 @@
 "use client";
 
-import { Archive, Brain, Loader2, Plus, Settings, Shield } from "lucide-react";
+import {
+  Archive,
+  Brain,
+  EyeOff,
+  Loader2,
+  Plus,
+  Settings,
+  Shield,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
@@ -29,17 +38,25 @@ export function Sidebar({
   activeId,
   onSelect,
   onNew,
+  onNewIncognito,
   onArchive,
+  onDelete,
   user,
 }: {
   conversations: ConversationSummary[];
   activeId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
+  onNewIncognito: () => void;
   onArchive: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   user: SidebarUser;
 }): React.ReactNode {
   const visible = conversations.filter((c) => !c.archived);
+
+  // Incognito is a member/admin control. A guest has no stored instructions and
+  // no memories to withhold, so offering it would be a switch that does nothing.
+  const canGoIncognito = user.role !== "guest";
 
   // Archiving hits the network and takes a beat; track in-flight ids so the
   // button shows a spinner and ignores repeat clicks (otherwise the lack of
@@ -59,20 +76,49 @@ export function Sidebar({
     }
   };
 
+  // Delete is irreversible and sits one pixel from archive, so it takes a second
+  // click on an explicit confirm rather than firing from the icon. Kept inline as
+  // a row state instead of a modal: the row itself is the thing being destroyed,
+  // so naming it in a dialog would be redundant.
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const handleDelete = async (id: string): Promise<void> => {
+    setDeletingId(id);
+    try {
+      await onDelete(id);
+    } finally {
+      setDeletingId(null);
+      setConfirmingId(null);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex items-center justify-between px-3 py-3">
         <span className="px-1 text-lg font-semibold tracking-tight">
           Claudius
         </span>
-        <button
-          type="button"
-          onClick={onNew}
-          className="flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1.5 text-sm hover:bg-sidebar-accent"
-        >
-          <Plus className="size-4" />
-          New
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onNew()}
+            className="flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1.5 text-sm hover:bg-sidebar-accent"
+          >
+            <Plus className="size-4" />
+            New
+          </button>
+          {canGoIncognito && (
+            <button
+              type="button"
+              onClick={onNewIncognito}
+              aria-label="New incognito chat"
+              title="New incognito chat — no memories, no saved instructions"
+              className="rounded-md border border-sidebar-border p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+            >
+              <EyeOff className="size-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       <Link
@@ -122,8 +168,16 @@ export function Sidebar({
                   )}
                 >
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {c.title}
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      {c.incognito && (
+                        <EyeOff
+                          className="size-3.5 shrink-0 self-center text-muted-foreground"
+                          aria-label="Incognito conversation"
+                        />
+                      )}
+                      <span className="truncate text-sm font-medium">
+                        {c.title}
+                      </span>
                     </span>
                     {/* Hidden on hover so the archive button can sit here
                         without overlapping the timestamp. */}
@@ -135,22 +189,65 @@ export function Sidebar({
                     {c.lastMessagePreview ?? "…"}
                   </p>
                 </button>
-                <button
-                  type="button"
-                  aria-label="Archive conversation"
-                  onClick={() => void handleArchive(c.id)}
-                  disabled={archiving.has(c.id)}
+                <div
                   className={cn(
-                    "absolute top-1.5 right-1.5 rounded p-1 text-warning hover:bg-warning/10 disabled:opacity-100",
-                    archiving.has(c.id) ? "block" : "hidden group-hover:block",
+                    "absolute top-1.5 right-1.5 flex items-center gap-0.5",
+                    archiving.has(c.id) || confirmingId === c.id
+                      ? "flex"
+                      : "hidden group-hover:flex",
                   )}
                 >
-                  {archiving.has(c.id) ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Archive className="size-3.5" />
-                  )}
-                </button>
+                  <button
+                    type="button"
+                    aria-label="Archive conversation"
+                    onClick={() => void handleArchive(c.id)}
+                    disabled={archiving.has(c.id)}
+                    className="rounded p-1 text-warning hover:bg-warning/10 disabled:opacity-100"
+                  >
+                    {archiving.has(c.id) ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Archive className="size-3.5" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Delete conversation"
+                    onClick={() => setConfirmingId(c.id)}
+                    className="rounded p-1 text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+
+                {confirmingId === c.id && (
+                  <div className="mx-1 mb-1 rounded-md border border-destructive/40 bg-destructive/5 px-2 py-1.5">
+                    <p className="text-xs text-muted-foreground">
+                      Delete this conversation and any files attached to it?
+                      This cannot be undone.
+                    </p>
+                    <div className="mt-1.5 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(c.id)}
+                        disabled={deletingId === c.id}
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-destructive hover:bg-destructive/10"
+                      >
+                        {deletingId === c.id && (
+                          <Loader2 className="size-3 animate-spin" />
+                        )}
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingId(null)}
+                        className="rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-sidebar-accent"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

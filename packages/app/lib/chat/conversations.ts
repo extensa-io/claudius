@@ -3,8 +3,11 @@ import {
   AppError,
   type Conversation,
   conversationsCol,
+  deleteThreadCheckpoints,
+  jobsCol,
   type Role,
 } from "@claudius/shared";
+import { deleteConversationDocuments } from "@/lib/documents";
 
 /**
  * All conversation reads and writes funnel through here, and every one of them
@@ -26,6 +29,8 @@ export interface ConversationSummary {
   archived: boolean;
   updatedAt: string;
   lastMessagePreview: string | null;
+  /** Normalized to a real boolean here; absent in the document means false. */
+  incognito: boolean;
 }
 
 function toSummary(doc: Conversation): ConversationSummary {
@@ -36,6 +41,7 @@ function toSummary(doc: Conversation): ConversationSummary {
     archived: doc.archived,
     updatedAt: doc.updatedAt.toISOString(),
     lastMessagePreview: doc.lastMessagePreview ?? null,
+    incognito: doc.incognito === true,
   };
 }
 
@@ -48,6 +54,13 @@ export async function createConversation(params: {
   userId: ObjectId;
   role: Role;
   modelId: string;
+  /**
+   * Set only when the caller asked for an incognito thread AND the role may have
+   * one. Creation is the only moment the flag can ever be set: it is not part of
+   * any update path, so an existing conversation can never become incognito or
+   * stop being it.
+   */
+  incognito?: boolean;
 }): Promise<Conversation> {
   const now = new Date();
   const base: Conversation = {
@@ -57,6 +70,9 @@ export async function createConversation(params: {
     createdAt: now,
     updatedAt: now,
     archived: false,
+    // Same omit-don't-set-undefined discipline as expiresAt below: absent is the
+    // normal state, and `literal(true)` makes an explicit false a type error.
+    ...(params.incognito ? { incognito: true as const } : {}),
   };
   // Omit (not set undefined) expiresAt for non-guests: with
   // exactOptionalPropertyTypes the key's absence is what keeps the TTL away.
@@ -148,6 +164,53 @@ export async function setArchived(
     throw new AppError("not_found", "Conversation not found.");
   }
   return toSummary(updated);
+}
+
+/**
+ * Permanently delete a conversation and everything that hangs off it: its
+ * attached documents (records, chunks and raw bytes), its jobs, its entire
+ * checkpointed transcript, and finally the conversation row itself.
+ *
+ * Children go first and the parent last, deliberately. MongoDB gives us no
+ * transaction across these collections, so a failure part way through has to
+ * leave SOMETHING recoverable, and the recoverable state is the one where the
+ * conversation still exists and the delete can simply be retried. Deleting the
+ * row first would strip the only handle the user has on the leftovers.
+ *
+ * Two things are deliberately NOT deleted. `usage_events` rows survive: they
+ * hold token counts, never content, and they back the daily cap, the monthly
+ * budget and the admin aggregates, all of which would silently drift if history
+ * could be erased by deleting a chat. Memories extracted from the thread survive
+ * too: they are separately visible and deletable under /memories, and deleting a
+ * conversation is a request to drop the transcript, not to unlearn the facts it
+ * taught. (An incognito thread never produces any, so this only ever applies to
+ * a normal one.)
+ */
+export async function deleteConversation(
+  userId: ObjectId,
+  conversationId: string,
+): Promise<void> {
+  if (!ObjectId.isValid(conversationId)) {
+    throw new AppError("not_found", "Conversation not found.");
+  }
+  const _id = new ObjectId(conversationId);
+  const col = await conversationsCol();
+  // Ownership check and the delete are separate steps, so read first: the
+  // cascade below needs the id, and a non-owned id must 404 before anything is
+  // removed.
+  const owned = await col.findOne({ _id, userId });
+  if (!owned) {
+    throw new AppError("not_found", "Conversation not found.");
+  }
+
+  await deleteConversationDocuments(userId, _id);
+
+  const jobs = await jobsCol();
+  await jobs.deleteMany({ userId, conversationId: _id });
+
+  await deleteThreadCheckpoints(conversationId);
+
+  await col.deleteOne({ _id, userId });
 }
 
 export { toSummary };

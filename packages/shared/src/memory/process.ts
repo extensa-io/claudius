@@ -70,6 +70,15 @@ export async function processConversationMemories(params: {
     return { status: "disabled", ...EMPTY };
   }
 
+  // An incognito thread is never mined. The enqueuer already filters these out,
+  // but the worker is a separate process claiming jobs from Mongo and must not
+  // depend on the enqueuer having been right — a job inserted before the flag
+  // existed, or by a future caller, still stops here. The watermark is left
+  // alone: there is nothing to reprocess, since the flag never changes.
+  if (conversation.incognito) {
+    return { status: "disabled", ...EMPTY };
+  }
+
   const tier = await loadTier(user.role);
   if (tier.memoryCap <= 0) {
     return { status: "no_allowance", ...EMPTY };

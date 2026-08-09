@@ -25,6 +25,10 @@ const GUEST_JOB_TTL_MS = 24 * 60 * 60 * 1000;
  */
 function staleFilter(): Record<string, unknown> {
   return {
+    // Incognito threads are never extracted from, no matter how stale they look.
+    // `$ne: true` rather than `{ $exists: false }` so it matches every
+    // conversation written before the field existed, without a backfill.
+    incognito: { $ne: true },
     $or: [
       { extraction: { $exists: false } },
       { $expr: { $gt: ["$updatedAt", "$extraction.lastRunAt"] } },

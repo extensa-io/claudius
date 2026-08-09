@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { PanelLeft } from "lucide-react";
+import { EyeOff, PanelLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Role } from "@claudius/shared";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
@@ -33,6 +33,7 @@ export function ChatPane({
   role,
   modelId,
   models,
+  incognito,
   imagePolicy,
   onModelChange,
   onConversationCreated,
@@ -48,6 +49,13 @@ export function ChatPane({
   role: Role;
   modelId: string;
   models: ModelOption[];
+  /**
+   * This thread runs without stored personal context. For an unsent new chat it
+   * is the draft's mode and rides along on the first request; for an existing
+   * conversation it is read back from the server and is display-only, since the
+   * flag is fixed at creation.
+   */
+  incognito: boolean;
   /** The role's image policy, or null when the role gets no image service. */
   imagePolicy: ImagePolicyView | null;
   onModelChange: (id: string) => void;
@@ -108,6 +116,9 @@ export function ChatPane({
               text,
               documentIds: body?.documentIds,
               imageIds: body?.imageIds,
+              // Only ever acted on when this request creates the conversation;
+              // on a resumed thread the server reads the stored flag instead.
+              incognito: body?.incognito,
             },
           };
         },
@@ -225,6 +236,7 @@ export function ChatPane({
           modelId,
           documentIds: documents.pendingDocumentIds,
           imageIds: documents.attachedImageIds,
+          incognito,
         },
       },
     );
@@ -296,7 +308,27 @@ export function ChatPane({
           onSelect={onModelChange}
           disabled={busy}
         />
+        {incognito && (
+          <span className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
+            <EyeOff className="size-3.5" />
+            Incognito
+          </span>
+        )}
       </header>
+
+      {/* The wording is deliberate about what incognito does NOT do. The thread
+          is still saved, and a file the user attaches here still comes from
+          their library — promising more than that would be a privacy claim the
+          feature doesn't make good on. */}
+      {incognito && (
+        <div className="mx-auto w-full max-w-3xl px-4 pt-3">
+          <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            This chat runs without your saved memories or custom instructions,
+            and nothing said here is added to memory. The transcript is still
+            saved until you delete the conversation.
+          </p>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1">
         {isEmpty ? (

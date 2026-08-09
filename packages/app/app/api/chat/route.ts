@@ -171,10 +171,21 @@ export const POST = auth(async (req) => {
     }
 
     // 5. Now safe to create a new conversation for a first message.
+    // Incognito is decided here and only here. On a NEW conversation the client
+    // may ask for it (members and admins only — guests have no stored
+    // instructions and no memories to withhold, so the mode would be theatre).
+    // On an EXISTING one the request field is ignored outright and the stored
+    // flag wins, so no turn can flip a thread's rules mid-way.
     const isNewConversation = conversation === null;
     if (!conversation) {
-      conversation = await createConversation({ userId, role, modelId });
+      conversation = await createConversation({
+        userId,
+        role,
+        modelId,
+        incognito: parsed.data.incognito === true && role !== "guest",
+      });
     }
+    const isIncognito = conversation.incognito === true;
     const conversationObjId = conversation._id!;
     const threadId = conversationObjId.toString();
     const conversationTitle = conversation.title;
@@ -231,6 +242,9 @@ export const POST = auth(async (req) => {
     // into the prompt above and outranking inferred memory. Members and admins
     // only: guests never author settings, so we skip the read entirely for them
     // and leave the fields absent (the prompt section is then omitted).
+    // An incognito turn still reads the row (the preferred name survives — see
+    // ChatGraphConfigurable.incognito) but the instructions are dropped below,
+    // never handed to the graph.
     const userSettings =
       role === "guest"
         ? { preferredName: null, instructions: null }
@@ -273,10 +287,17 @@ export const POST = auth(async (req) => {
               userId: userId.toString(),
               attachedDocumentIds,
               attachedDocumentNames,
-              // load_context skips retrieval entirely when memory is off.
-              memoryEnabled: grant.memoryEnabled,
+              // load_context skips retrieval entirely when memory is off — and
+              // an incognito thread forces it off regardless of the user's own
+              // memory setting.
+              memoryEnabled: grant.memoryEnabled && !isIncognito,
               preferredName: userSettings.preferredName,
-              customInstructions: userSettings.instructions,
+              customInstructions: isIncognito ? null : userSettings.instructions,
+              // Withholding the two fields above is what actually severs stored
+              // context; passing the flag as well lets the graph enforce it a
+              // second time rather than trusting this route to be the only
+              // caller that gets it right.
+              incognito: isIncognito,
               // read_url is a member/admin capability (Phase 11): the flag is
               // set from the session-derived role, never from client input, so a
               // guest turn never gets the tool bound (invariant #2).

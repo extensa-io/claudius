@@ -6,6 +6,7 @@ export {
 } from "./graph";
 export { buildChatModel, type BuildChatModelOptions } from "./model";
 export { getCheckpointer } from "./checkpointer";
+export { deleteThreadCheckpoints } from "./deleteThread";
 export { SYSTEM_PROMPT } from "./prompts";
 export {
   tools,

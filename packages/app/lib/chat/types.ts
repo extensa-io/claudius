@@ -128,6 +128,14 @@ export const ChatRequestSchema = z.object({
    * in the route; this bound is only a payload sanity limit.
    */
   imageIds: z.array(z.string().min(1)).max(10).optional(),
+  /**
+   * Request an incognito thread. Honored ONLY on the first message of a new
+   * conversation, and only for members and admins; on every later turn the route
+   * ignores this field and reads the flag off the stored conversation. That is
+   * what makes the mode immutable: the client cannot turn context back on for a
+   * thread that started without it, or off for one that started with it.
+   */
+  incognito: z.boolean().optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;

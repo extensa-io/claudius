@@ -1,3 +1,4 @@
+import { del } from "@vercel/blob";
 import { ObjectId } from "mongodb";
 import {
   classifyDocument,
@@ -109,12 +110,55 @@ export async function deleteDocument(
   if (!ObjectId.isValid(documentId)) return false;
   const _id = new ObjectId(documentId);
   const docs = await documentsCol();
-  const deleted = await docs.deleteOne({ _id, userId });
-  if (deleted.deletedCount === 0) return false;
+  const deleted = await docs.findOneAndDelete({ _id, userId });
+  if (!deleted) return false;
   // Chunks carry userId too; scope the cleanup by both for defense in depth.
   const chunks = await chunksCol();
   await chunks.deleteMany({ documentId: _id, userId });
+  await deleteBlobs([deleted.blobUrl]);
   return true;
+}
+
+/**
+ * Delete every document attached to one conversation, with its chunks and its
+ * bytes. Used by the conversation cascade; the per-document path above is the
+ * same operation for a single file.
+ */
+export async function deleteConversationDocuments(
+  userId: ObjectId,
+  conversationId: ObjectId,
+): Promise<void> {
+  const docs = await documentsCol();
+  const owned = await docs
+    .find({ userId, conversationId }, { projection: { _id: 1, blobUrl: 1 } })
+    .toArray();
+  if (owned.length === 0) return;
+
+  const ids = owned.map((d) => d._id!);
+  const chunks = await chunksCol();
+  await chunks.deleteMany({ documentId: { $in: ids }, userId });
+  await docs.deleteMany({ _id: { $in: ids }, userId });
+  await deleteBlobs(owned.map((d) => d.blobUrl));
+}
+
+/**
+ * Remove raw bytes from Vercel Blob, best effort. Blob is a separate service
+ * with no transaction shared with MongoDB, so this is the one step that can fail
+ * on its own. It is deliberately non-fatal and runs LAST: a stranded blob is
+ * unreachable once its document row is gone (nothing maps back to the URL) and
+ * costs only storage, whereas aborting the cascade on a Blob timeout would leave
+ * the user looking at a conversation they were told was deleted.
+ */
+async function deleteBlobs(urls: string[]): Promise<void> {
+  if (urls.length === 0) return;
+  try {
+    await del(urls);
+  } catch (err) {
+    console.error(
+      "Blob deletion failed (records already removed):",
+      err instanceof Error ? `${err.name}: ${err.message}` : err,
+    );
+  }
 }
 
 /**

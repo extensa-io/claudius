@@ -34,6 +34,7 @@ const {
   failJob,
   requestJobCancel,
   getJobForOwner,
+  isJobCancelled,
 } = await import("./index");
 
 beforeEach(() => {
@@ -135,6 +136,24 @@ describe("terminal transitions are cancellation-safe", () => {
     await failJob(new ObjectId(), "boom");
     const filter = updateOne.mock.calls[0]?.[0];
     expect(filter.status).toBe("running");
+  });
+
+  it("treats a cancelled job as cancelled", async () => {
+    findOne.mockResolvedValue({ status: "cancelled" });
+    expect(await isJobCancelled(new ObjectId())).toBe(true);
+  });
+
+  it("treats a VANISHED job as cancelled", async () => {
+    // Deleting a conversation deletes its jobs. Without this, an in-flight
+    // research run would finish and append its report to the thread the user
+    // just deleted, recreating checkpoints nothing points at.
+    findOne.mockResolvedValue(null);
+    expect(await isJobCancelled(new ObjectId())).toBe(true);
+  });
+
+  it("lets a running job keep going", async () => {
+    findOne.mockResolvedValue({ status: "running" });
+    expect(await isJobCancelled(new ObjectId())).toBe(false);
   });
 });
 

@@ -120,6 +120,20 @@ export interface ChatGraphConfigurable {
    * client input (invariant #2), exactly like canReadUrls.
    */
   canUseVision?: boolean;
+  /**
+   * Incognito turn: no persisted personal context reaches the model. The route
+   * already withholds it (memoryEnabled false, customInstructions absent), so
+   * this flag is belt-and-braces — the graph refuses to assemble that context
+   * itself rather than trusting every present and future caller to remember.
+   * It also saves the retrieval embedding call, since load_context can bail
+   * before touching Voyage or Atlas.
+   *
+   * `preferredName` deliberately survives: a name the user typed into settings
+   * is what they want to be called, not something inferred about them, and
+   * dropping it would make incognito read as a different assistant rather than
+   * the same one with no memory of you.
+   */
+  incognito?: boolean;
 }
 
 function readConfigurable(config: RunnableConfig): ChatGraphConfigurable {
@@ -175,8 +189,10 @@ async function loadContext(
   state: GraphState,
   config: RunnableConfig,
 ): Promise<GraphUpdate> {
-  const { userId, memoryEnabled } = readConfigurable(config);
-  if (!userId || memoryEnabled === false) return { memoryContext: "" };
+  const { userId, memoryEnabled, incognito } = readConfigurable(config);
+  if (!userId || memoryEnabled === false || incognito) {
+    return { memoryContext: "" };
+  }
 
   const ownerId = new ObjectId(userId);
   const query = buildRetrievalQuery(state);
@@ -225,6 +241,7 @@ async function agent(
     canReadUrls,
     imageIds,
     canUseVision,
+    incognito,
     userId,
   } = readConfigurable(config);
   // Offer retrieve_documents only when this conversation actually has embedded
@@ -244,9 +261,13 @@ async function agent(
   // above" reference resolves. The authored settings sit ABOVE memory and
   // outrank it: what the user explicitly told us wins over what we inferred.
   const sections = [currentDateLine(new Date()), SYSTEM_PROMPT];
+  // On an incognito turn the authored instructions are dropped here as well as
+  // withheld by the route: memoryContext is already empty (load_context bailed),
+  // so this is the last place stored personal context could still enter the
+  // prompt. The preferred name is the one thing that stays.
   const settingsNote = userSettingsNote({
     preferredName: preferredName ?? null,
-    instructions: customInstructions ?? null,
+    instructions: incognito ? null : (customInstructions ?? null),
   });
   if (settingsNote) sections.push(settingsNote);
   if (state.memoryContext.length > 0) sections.push(state.memoryContext);

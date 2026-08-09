@@ -82,4 +82,21 @@ describe("userSettingsNote", () => {
     expect(note).toContain("Néstor");
     expect(note).toContain("Be terse.");
   });
+
+  /**
+   * An incognito turn withholds the instructions and keeps the name, so the
+   * name-only shape is a real prompt this time, not a corner case: it must not
+   * announce instructions that were deliberately left out, or the model reads a
+   * missing section and asks about it.
+   */
+  it("does not announce instructions when only the name is set", () => {
+    const note = userSettingsNote({
+      preferredName: "Néstor",
+      instructions: null,
+    });
+    expect(note).toContain("Néstor");
+    expect(note).not.toContain("<user_instructions>");
+    expect(note?.toLowerCase()).not.toContain("personal instructions");
+    expect(note?.toLowerCase()).not.toContain("precedence");
+  });
 });

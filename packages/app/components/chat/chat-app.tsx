@@ -85,6 +85,18 @@ export function ChatApp({
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  /**
+   * Whether the pane currently showing an unsent new chat is incognito. It is a
+   * property of the DRAFT only: once the first turn creates the conversation the
+   * server owns the flag, and this value is re-derived from the conversation
+   * list, so nothing here can flip an existing thread's mode.
+   */
+  const [pendingIncognito, setPendingIncognito] = useState(false);
+  const activeConversation = conversations.find((c) => c.id === activeId);
+  const isIncognito = activeId
+    ? (activeConversation?.incognito ?? false)
+    : pendingIncognito;
+
   // The `?q=` deep-link prompt is consumed once by the initial pane. Clear it as
   // soon as it's sent, and on any navigation, so a later "new chat" or a
   // conversation switch never re-injects it.
@@ -136,6 +148,7 @@ export function ChatApp({
     async (id: string): Promise<void> => {
       setSidebarOpen(false);
       setPendingPrompt(null);
+      setPendingIncognito(false);
       if (id === activeId) return;
       const res = await fetch(`/api/conversations/${id}`);
       if (!res.ok) return;
@@ -160,13 +173,14 @@ export function ChatApp({
     [activeId, models],
   );
 
-  const newChat = useCallback((): void => {
+  const newChat = useCallback((incognito = false): void => {
     setSidebarOpen(false);
     setPendingPrompt(null);
     setActiveId(null);
     setSeedMessages([]);
     setSeedDocuments([]);
     setSeedJobs([]);
+    setPendingIncognito(incognito);
     newCounter.current += 1;
     setPaneKey(`new-${newCounter.current}`);
     setUrl(null);
@@ -190,12 +204,15 @@ export function ChatApp({
                 archived: false,
                 updatedAt: new Date().toISOString(),
                 lastMessagePreview: null,
+                // Mirrors what the server just stored for this thread; the next
+                // refreshConversations replaces this row with the real one.
+                incognito: pendingIncognito,
               },
               ...prev,
             ],
       );
     },
-    [modelId],
+    [modelId, pendingIncognito],
   );
 
   const onTurnComplete = useCallback((): void => {
@@ -217,13 +234,27 @@ export function ChatApp({
     [activeId, newChat, refreshConversations],
   );
 
+  const remove = useCallback(
+    async (id: string): Promise<void> => {
+      const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+      if (!res.ok) return;
+      // Drop it locally rather than waiting on a refetch: the row is gone for
+      // good, and leaving it on screen while the list reloads reads as a failure.
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (id === activeId) newChat();
+    },
+    [activeId, newChat],
+  );
+
   const sidebar = (
     <Sidebar
       conversations={conversations}
       activeId={activeId}
       onSelect={(id) => void selectConversation(id)}
       onNew={newChat}
+      onNewIncognito={() => newChat(true)}
       onArchive={archive}
+      onDelete={remove}
       user={user}
     />
   );
@@ -253,6 +284,7 @@ export function ChatApp({
             role={user.role as Role}
             modelId={modelId}
             models={models}
+            incognito={isIncognito}
             imagePolicy={imagePolicy}
             onModelChange={changeModel}
             onConversationCreated={onConversationCreated}

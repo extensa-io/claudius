@@ -25,6 +25,20 @@ export const ConversationSchema = z.object({
   lastMessagePreview: z.string().optional(),
   expiresAt: z.date().optional(),
   /**
+   * Incognito threads read no persisted personal context (no memories, no
+   * user-authored instructions) and are never mined for new ones. The flag is
+   * fixed when the conversation is created and never changes, so every turn in
+   * the thread ran under the same rules — a mid-thread toggle would leave a
+   * transcript where some answers saw context and some didn't, with nothing to
+   * tell them apart.
+   *
+   * Typed `literal(true)` rather than `boolean` so `false` is unrepresentable:
+   * a normal conversation omits the key entirely, which means there is exactly
+   * one shape to query for and the `{ $ne: true }` extraction filter matches
+   * every document written before this field existed, with no backfill.
+   */
+  incognito: z.literal(true).optional(),
+  /**
    * Memory-extraction watermark (Phase 3). `lastRunAt` is when extraction last
    * processed this thread; `messageCount` is how many checkpointed messages had
    * been seen by then, so the next run extracts only the turns beyond it rather

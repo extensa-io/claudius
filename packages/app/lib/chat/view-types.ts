@@ -12,6 +12,8 @@ export interface ConversationSummary {
   archived: boolean;
   updatedAt: string;
   lastMessagePreview: string | null;
+  /** Started as an incognito thread: no memories, no authored instructions. */
+  incognito: boolean;
 }
 
 export interface ModelOption {

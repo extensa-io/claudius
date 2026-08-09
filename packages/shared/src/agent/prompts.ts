@@ -103,8 +103,15 @@ export function userSettingsNote(params: {
   const instructions = params.instructions?.trim() || null;
   if (!preferredName && !instructions) return null;
 
+  // The preamble is written for the instructions block, so a name-only call —
+  // which is what an incognito turn produces, since the instructions are
+  // withheld — gets a plainer lead-in instead. Announcing "the following
+  // personal instructions" above nothing but a name reads as a missing section
+  // and invites the model to ask where the instructions went.
   const sections: string[] = [
-    "The user has set the following personal instructions for you. Unlike your memory, which you inferred from past conversations, this is what the user has explicitly told you about themselves and how they want you to respond. Follow it. When it conflicts with a recalled memory, these instructions take precedence.",
+    instructions
+      ? "The user has set the following personal instructions for you. Unlike your memory, which you inferred from past conversations, this is what the user has explicitly told you about themselves and how they want you to respond. Follow it. When it conflicts with a recalled memory, these instructions take precedence."
+      : "The user has told you how they would like to be addressed.",
   ];
 
   if (preferredName) {

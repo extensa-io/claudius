@@ -4,6 +4,7 @@ import { z } from "zod";
 import { AppError, loadThreadMessages } from "@claudius/shared";
 import { auth } from "@/lib/auth";
 import {
+  deleteConversation,
   getOwnedConversation,
   setArchived,
   toSummary,
@@ -85,6 +86,38 @@ export async function PATCH(
 
     const conversation = await setArchived(userId, id, parsed.data.archived);
     return Response.json({ conversation });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+/**
+ * Permanently delete a conversation: transcript, attached files and jobs, not
+ * just the sidebar row. Archive hides a thread; this is the one that makes it
+ * gone, which is what an incognito thread needs to be disposable — but it is
+ * available on every conversation, since "I want this chat erased" is not a
+ * question that only arises in incognito.
+ *
+ * Ownership is enforced inside deleteConversation, and a missing or non-owned id
+ * is the same indistinguishable 404 the rest of this route returns.
+ */
+export async function DELETE(
+  _req: NextRequest,
+  ctx: RouteContext,
+): Promise<Response> {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return Response.json(
+        { error: { code: "unauthorized" } },
+        { status: 401 },
+      );
+    }
+    const userId = new ObjectId(session.user.id);
+    const { id } = await ctx.params;
+
+    await deleteConversation(userId, id);
+    return Response.json({ ok: true });
   } catch (err) {
     return errorResponse(err);
   }
