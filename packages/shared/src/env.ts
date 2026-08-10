@@ -60,6 +60,14 @@ const EnvSchema = z.object({
   // validated at boot in both runtimes.
   GITHUB_TOKEN: z.string().min(1).optional(),
 
+  // --- Optional in both: market data (Phase 13) -------------------------
+  // Twelve Data backs quote mode (`$MDB`, `$500 CAD to COP`). OPTIONAL, not
+  // required: only the app's quote path calls it, the worker never quotes, and a
+  // deployment without the key should still boot — the quote path then returns a
+  // clean "quotes are unavailable" message instead of failing at startup. Listed
+  // here so a deployment that DOES set it is validated at boot.
+  TWELVEDATA_API_KEY: z.string().min(1).optional(),
+
   // --- Optional in both: LangSmith tracing ------------------------------
   // LangChain JS auto-instruments from these process.env vars when
   // LANGSMITH_TRACING is "true" and an API key is present; absent, tracing is

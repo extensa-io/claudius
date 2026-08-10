@@ -6,6 +6,7 @@ import type {
   DocumentRecord,
   Job,
   DictionaryCacheEntry,
+  QuoteCacheEntry,
   Memory,
   RateLimit,
   SearchCacheEntry,
@@ -43,6 +44,11 @@ export const COLLECTIONS = {
   // DictionaryCacheEntrySchema). Separate from searchCache because the value is
   // a Markdown entry, not search results. Entries reap on an evergreen TTL.
   dictionaryCache: "dictionary_cache",
+  // Phase 13: the quote-mode market-data cache. GLOBAL and content-only for the
+  // same reason as the two above — no userId, no user data (see
+  // QuoteCacheEntrySchema). Its TTL is session-aware rather than fixed: seconds
+  // while a market is open, half an hour once it has closed.
+  quoteCache: "quote_cache",
 } as const;
 
 export async function usersCol(): Promise<Collection<User>> {
@@ -95,4 +101,8 @@ export async function dictionaryCacheCol(): Promise<
   return (await getDb()).collection<DictionaryCacheEntry>(
     COLLECTIONS.dictionaryCache,
   );
+}
+
+export async function quoteCacheCol(): Promise<Collection<QuoteCacheEntry>> {
+  return (await getDb()).collection<QuoteCacheEntry>(COLLECTIONS.quoteCache);
 }

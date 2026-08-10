@@ -38,6 +38,8 @@ export {
   type HydratedImage,
 } from "./documents/images";
 export * from "./answer";
+// Phase 13: market data behind quote mode (`$`).
+export * from "./market";
 export * from "./agent";
 export * from "./tiers";
 export * from "./usage";

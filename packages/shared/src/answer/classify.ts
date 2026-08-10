@@ -2,6 +2,7 @@ import type { Bang, SearchSettings } from "../db/schemas";
 import { hasBang } from "./bangs";
 import { DEFAULT_ESCALATION_KEYWORDS } from "./defaults";
 import { parseDefineQuery } from "./dictionary";
+import { parseQuoteQuery } from "./quotes";
 import type { Intent } from "./types";
 
 /**
@@ -95,6 +96,13 @@ export function classifyIntent(
   //     turn before the search engine ever runs.
   if (parseDefineQuery(query) !== null) {
     return { intent: "lexical", reason: "define_operator", highValue: false };
+  }
+
+  // (0.5) Explicit `$` quote operator → market (Phase 13). Beside the `?` rule
+  //       and before bang for the same reason: `$` is unambiguous, and the quote
+  //       path short-circuits the turn before the search engine ever runs.
+  if (parseQuoteQuery(query) !== null) {
+    return { intent: "market", reason: "quote_operator", highValue: false };
   }
 
   // (1) Explicit bang → navigational, highest-confidence signal.

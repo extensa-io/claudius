@@ -59,3 +59,32 @@ export {
   type DictionaryCacheStore,
   type DictionaryPromptMessages,
 } from "./dictionary";
+// Phase 13: quote mode (`$` stocks, indices, FX and crypto).
+export {
+  parseQuoteQuery,
+  isCurrencyCode,
+  resolveSymbol,
+  resolveChange,
+  renderQuote,
+  renderConversion,
+  quoteCacheKey,
+  conversionCacheKey,
+  quoteTtlSeconds,
+  getDefaultQuoteCacheStore,
+  MemoryQuoteCacheStore,
+  MongoQuoteCacheStore,
+  TieredQuoteCacheStore,
+  QUOTE_TTL_OPEN_SECONDS,
+  QUOTE_TTL_CLOSED_SECONDS,
+  type QuoteQuery,
+  type SymbolQuery,
+  type ConvertQuery,
+  type ResolvedSymbol,
+  type QuoteChange,
+  type ChangeWindow,
+  type QuoteRender,
+  type ConversionRender,
+  type QuoteValue,
+  type QuoteCacheStore,
+} from "./quotes";
+export { QUOTE_ALIASES, type QuoteAlias } from "./defaults";

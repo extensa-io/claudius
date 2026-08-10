@@ -60,3 +60,43 @@ export const DEFAULT_CACHE_TTLS: CacheTtls = {
   evergreenSeconds: 7 * 24 * 60 * 60, // 7 days — stable facts (the common case)
   transactionalSeconds: 60 * 60, // 1 hour — prices/availability churn
 };
+
+/**
+ * Symbol aliases for quote mode (Phase 13): a map from what people actually type
+ * to what the market-data provider expects.
+ *
+ * Two jobs. The easy one is spelling — nobody types `XAU/USD` when they mean
+ * gold. The interesting one is INDICES: a real index feed (`^GSPC`, `SPX`) is a
+ * paid entitlement on every free provider tier, so an index alias resolves to
+ * the ETF that tracks it and carries `proxyFor` so the render can disclose the
+ * substitution instead of passing an ETF price off as the index. Upgrading the
+ * provider plan later means dropping the `proxyFor` entries, not changing code.
+ */
+export interface QuoteAlias {
+  /** What we ask the provider for. */
+  provider: string;
+  /** Present when `provider` only TRACKS what was asked about. */
+  proxyFor?: string;
+}
+
+export const QUOTE_ALIASES: Record<string, QuoteAlias> = {
+  // Indices → tracking ETFs (free-tier substitution, always disclosed).
+  "S&P": { provider: "SPY", proxyFor: "the S&P 500" },
+  SP500: { provider: "SPY", proxyFor: "the S&P 500" },
+  SPX: { provider: "SPY", proxyFor: "the S&P 500" },
+  "^GSPC": { provider: "SPY", proxyFor: "the S&P 500" },
+  DOW: { provider: "DIA", proxyFor: "the Dow Jones Industrial Average" },
+  DJIA: { provider: "DIA", proxyFor: "the Dow Jones Industrial Average" },
+  NASDAQ: { provider: "QQQ", proxyFor: "the Nasdaq-100" },
+  NDX: { provider: "QQQ", proxyFor: "the Nasdaq-100" },
+  TSX: { provider: "XIC.TO", proxyFor: "the S&P/TSX Composite" },
+  // Commodities → the pair the provider quotes them as.
+  GOLD: { provider: "XAU/USD" },
+  SILVER: { provider: "XAG/USD" },
+  // Crypto → an explicit pair, so the continuous-market path is detected.
+  BTC: { provider: "BTC/USD" },
+  BITCOIN: { provider: "BTC/USD" },
+  ETH: { provider: "ETH/USD" },
+  ETHEREUM: { provider: "ETH/USD" },
+  SOL: { provider: "SOL/USD" },
+};

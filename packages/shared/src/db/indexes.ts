@@ -139,6 +139,18 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
   created.push("dictionary_cache.expiresAt_ttl");
 
+  // --- quote_cache: the Phase 13 quote-mode cache -----------------------
+  // Same shape again: the cache key IS the _id (a hash of the resolved symbol or
+  // currency pair), so a lookup is a primary-key hit. The TTL here is the one
+  // that varies per document by market state rather than by content type — an
+  // open-market quote lives 60s, a closed-market one 30 minutes — which is
+  // exactly what a per-document expiresAt TTL is for. No user data, so no userId
+  // index and no invariant-#1 concern (see QuoteCacheEntrySchema).
+  await db
+    .collection(COLLECTIONS.quoteCache)
+    .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
+  created.push("quote_cache.expiresAt_ttl");
+
   // --- vector search indexes --------------------------------------------
   // Created programmatically against Atlas. Every search filters by userId as a
   // pre-filter (invariant: a vector search never returns another user's data),

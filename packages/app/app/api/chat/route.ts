@@ -10,12 +10,14 @@ import {
   isAppError,
   loadSearchSettings,
   parseDefineQuery,
+  parseQuoteQuery,
   resolveTurnImages,
   writeUsageEvent,
 } from "@claudius/shared";
 import { auth } from "@/lib/auth";
 import { bridgeGraphEvents, createTurnProgress } from "@/lib/chat/bridge";
 import { handleDictionaryTurn } from "@/lib/chat/dictionary";
+import { handleQuoteTurn } from "@/lib/chat/quotes";
 import {
   createConversation,
   getOwnedConversation,
@@ -154,6 +156,28 @@ export const POST = auth(async (req) => {
         rawText: text,
         conversation,
         signal: req.signal,
+      });
+    }
+
+    // 3.6 Quote mode (Phase 13): a leading `$` instrument lookup or currency
+    //     conversion routes to the quote engine. It renders provider DATA, so it
+    //     runs no model on any branch — no gate, no usage_events row, no daily
+    //     message — and invariant #3 holds because there is no Bedrock call to
+    //     gate. MEMBERS AND ADMINS ONLY: the role comes from the session, never
+    //     from client input (invariant #2), and a guest `$` simply falls through
+    //     to a normal chat turn rather than reaching a metered third-party API.
+    //     Same image skip as the dictionary: a turn with a picture attached is a
+    //     question about the picture.
+    const quoteQuery =
+      imageIds.length > 0 || role === "guest" ? null : parseQuoteQuery(text);
+    if (quoteQuery !== null) {
+      return await handleQuoteTurn({
+        userId,
+        role,
+        modelId,
+        query: quoteQuery,
+        rawText: text,
+        conversation,
       });
     }
 

@@ -84,6 +84,10 @@ export function ttlForIntent(
     // TTL here. Return 0 (never cache) defensively.
     case "lexical":
       return 0;
+    // Phase 13: likewise, a `$` market query is served by the quote path with its
+    // own session-aware cache and never reaches the search cache.
+    case "market":
+      return 0;
     case "transactional":
       return ttls.transactionalSeconds;
     case "informational":

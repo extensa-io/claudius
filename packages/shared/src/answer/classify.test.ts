@@ -26,6 +26,22 @@ describe("classifyIntent", () => {
     expect(classifyIntent("what is ephemeral?").intent).toBe("informational");
   });
 
+  it("classifies a leading `$` quote operator as market (Phase 13)", () => {
+    expect(classifyIntent("$MDB").intent).toBe("market");
+    expect(classifyIntent("$500 CAD to COP").reason).toBe("quote_operator");
+    expect(classifyIntent("$BTC").intent).toBe("market");
+    // A sentence that merely mentions money is a normal query, not a quote.
+    expect(classifyIntent("how much is $500 in colombian pesos").intent).not.toBe(
+      "market",
+    );
+    // "convert" is a transactional verb, so this one routes to the engine, but
+    // still never to the quote path.
+    expect(classifyIntent("convert $500 CAD to COP").intent).toBe(
+      "transactional",
+    );
+    expect(classifyIntent("$").intent).toBe("informational");
+  });
+
   it("classifies an explicit bang as navigational", () => {
     expect(classifyIntent("!gh langgraph").intent).toBe("navigational");
     expect(classifyIntent("query !w").reason).toBe("bang");

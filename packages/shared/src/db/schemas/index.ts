@@ -11,3 +11,4 @@ export * from "./rateLimit";
 export * from "./job";
 export * from "./searchCache";
 export * from "./dictionaryCache";
+export * from "./quoteCache";

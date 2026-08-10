@@ -89,7 +89,7 @@ When adding a new tool: figure out which workspaces import it (in scripts, confi
 
 ## Environment variables
 
-`MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY` (Phase 2), `TAVILY_API_KEY` (Phase 1), `BLOB_READ_WRITE_TOKEN` (Phase 2), `LANGSMITH_*` (Phase 4), `ADMIN_EMAIL` (bootstrap admin). Validate all of them in `packages/shared/src/env.ts`.
+`MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY` (Phase 2), `TAVILY_API_KEY` (Phase 1), `BLOB_READ_WRITE_TOKEN` (Phase 2), `LANGSMITH_*` (Phase 4), `ADMIN_EMAIL` (bootstrap admin), `TWELVEDATA_API_KEY` (optional, market data for quote mode). Validate all of them in `packages/shared/src/env.ts`.
 
 ## Commands
 

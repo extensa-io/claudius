@@ -161,11 +161,14 @@ export async function answerSearch(
   request: AnswerSearchRequest,
   opts: { cache?: CacheStore; cacheTtls?: CacheTtls } = {},
 ): Promise<AnswerSearchResult> {
-  // A lexical (`?` dictionary) query is served by the dictionary path and never
-  // reaches the engine; if one somehow arrives, treat it as informational so the
-  // search cache's SearchIntent stays honest.
+  // A lexical (`?` dictionary) query is served by the dictionary path and a
+  // market (`$` quote) query by the quote path; neither reaches the engine. If
+  // one somehow arrives, treat it as informational so the search cache's
+  // SearchIntent stays honest.
   const intent: SearchIntent =
-    request.intent && request.intent !== "lexical"
+    request.intent &&
+    request.intent !== "lexical" &&
+    request.intent !== "market"
       ? request.intent
       : "informational";
   const { cache } = opts;
