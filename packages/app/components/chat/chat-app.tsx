@@ -7,6 +7,7 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
+import type { BangView } from "@/lib/chat/help";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type {
   ConversationSummary,
@@ -42,6 +43,7 @@ export function ChatApp({
   initialJobs,
   budget,
   imagePolicy,
+  bangs,
   initialPrompt,
 }: {
   user: SidebarUser;
@@ -64,6 +66,11 @@ export function ChatApp({
    * before upload and to count attachments; the server re-checks both.
    */
   imagePolicy: ImagePolicyView | null;
+  /**
+   * The merged bang table (built-ins plus admin customs), listed by `/help`.
+   * Read server-side so custom bangs stay discoverable.
+   */
+  bangs: BangView[];
   /**
    * A `?q=` deep-link query to auto-send as the first message of a new
    * conversation (Phase 9 widget path). Null unless the page was opened with a
@@ -286,6 +293,7 @@ export function ChatApp({
             models={models}
             incognito={isIncognito}
             imagePolicy={imagePolicy}
+            bangs={bangs}
             onModelChange={changeModel}
             onConversationCreated={onConversationCreated}
             onTurnComplete={onTurnComplete}

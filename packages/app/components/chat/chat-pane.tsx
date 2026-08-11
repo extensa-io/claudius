@@ -5,6 +5,7 @@ import { DefaultChatTransport } from "ai";
 import { EyeOff, PanelLeft } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Role } from "@claudius/shared";
+import { buildHelpText, isHelpCommand, type BangView } from "@/lib/chat/help";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type {
   DocumentView,
@@ -35,6 +36,7 @@ export function ChatPane({
   models,
   incognito,
   imagePolicy,
+  bangs,
   onModelChange,
   onConversationCreated,
   onTurnComplete,
@@ -58,6 +60,8 @@ export function ChatPane({
   incognito: boolean;
   /** The role's image policy, or null when the role gets no image service. */
   imagePolicy: ImagePolicyView | null;
+  /** The merged bang table, listed by the `/help` cheat sheet. */
+  bangs: BangView[];
   onModelChange: (id: string) => void;
   onConversationCreated: (id: string, title: string) => void;
   onTurnComplete: () => void;
@@ -221,6 +225,33 @@ export function ChatPane({
 
   const send = (text: string): void => {
     setResearchError(null);
+    // `/help` is answered here, in the browser: the text is static, so a round
+    // trip would spend a model call, a daily message, and a checkpoint write on
+    // something we already know. The pair is added to this session only — it is
+    // never persisted, so the model does not read the cheat sheet on the next
+    // turn. Intercepted ahead of the research toggle: help is not a question, so
+    // it must not consume a queued research run.
+    if (isHelpCommand(text)) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `help-q-${prev.length}`,
+          role: "user",
+          parts: [{ type: "text", text }],
+        },
+        {
+          id: `help-a-${prev.length}`,
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              text: buildHelpText({ role, bangs, canAttachImages }),
+            },
+          ],
+        },
+      ]);
+      return;
+    }
     if (researchOn) {
       // Research is a one-shot per question: turn the toggle back off so the next
       // message is a normal chat turn unless the user re-enables it.
@@ -334,7 +365,11 @@ export function ChatPane({
         {isEmpty ? (
           <div className="flex h-full items-center justify-center px-6">
             <p className="text-center text-muted-foreground">
-              Ask anything to get started.
+              Ask anything to get started, or type{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-sm">
+                /help
+              </code>{" "}
+              to see what Claudius can do.
             </p>
           </div>
         ) : (

@@ -5,14 +5,17 @@ import {
   getMonthlyBudgetStatus,
   getUsableModels,
   getUserSettings,
+  loadSearchSettings,
   loadThreadMessages,
   loadTier,
+  mergeBangs,
 } from "@claudius/shared";
 import { ChatApp, type BudgetInfo } from "@/components/chat/chat-app";
 import { auth } from "@/lib/auth";
 import { signOut } from "@/lib/auth";
 import { getOwnedConversation, listConversations } from "@/lib/chat/conversations";
 import { sanitizeDeepLinkQuery } from "@/lib/chat/deep-link";
+import { bangHost, type BangView } from "@/lib/chat/help";
 import { toUIMessages } from "@/lib/chat/messages";
 import type { ClaudiusUIMessage } from "@/lib/chat/types";
 import type { DocumentView } from "@/lib/chat/view-types";
@@ -124,6 +127,16 @@ export default async function ChatPage({
   // special-cased — so guests simply get null here and no attach affordance.
   const imagePolicy = (await loadTier(session.user.role)).images ?? null;
 
+  // The bang table for `/help`. Read from settings and merged the same way the
+  // chat route resolves a bang, so custom bangs an admin added are listed rather
+  // than only the built-ins. Flattened to token + host here: the client needs no
+  // URL templates, and this keeps settings out of the browser payload.
+  const bangs: BangView[] = [
+    ...mergeBangs((await loadSearchSettings()).customBangs).entries(),
+  ]
+    .map(([token, urlTemplate]) => ({ token, host: bangHost(urlTemplate) }))
+    .sort((a, b) => a.token.localeCompare(b.token));
+
   // Seed new conversations from the remembered choice, but only if it's still a
   // model the user may use (a role or catalog change can strip access). Null
   // otherwise, and ChatApp falls back to the first allowed model.
@@ -181,6 +194,7 @@ export default async function ChatPage({
       initialJobs={initialJobs}
       budget={budget}
       imagePolicy={imagePolicy}
+      bangs={bangs}
       initialPrompt={initialPrompt}
     />
   );
