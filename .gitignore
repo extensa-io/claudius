@@ -54,3 +54,4 @@ packages/android/**/build/
 packages/android/**/*.apk
 packages/android/**/*.aab
 packages/android/**/*.idsig
+.env*
