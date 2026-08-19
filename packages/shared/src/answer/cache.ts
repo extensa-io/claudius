@@ -88,6 +88,10 @@ export function ttlForIntent(
     // own session-aware cache and never reaches the search cache.
     case "market":
       return 0;
+    // Phase 14: likewise, a `&` translate query is served by the translate path
+    // with its own evergreen cache and never reaches the search cache.
+    case "lingual":
+      return 0;
     case "transactional":
       return ttls.transactionalSeconds;
     case "informational":

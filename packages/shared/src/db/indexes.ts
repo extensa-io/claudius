@@ -151,6 +151,17 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
   created.push("quote_cache.expiresAt_ttl");
 
+  // --- translation_cache: the Phase 14 translate-mode cache -------------
+  // Same shape as dictionary_cache: the cache key IS the _id (a hash of the
+  // normalized text + source + target), so a lookup is a primary-key hit and
+  // needs no extra index, and a TTL on expiresAt reaps each entry on its
+  // evergreen lifetime. No user data, so no userId index and no invariant-#1
+  // concern (see TranslationCacheEntrySchema).
+  await db
+    .collection(COLLECTIONS.translationCache)
+    .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
+  created.push("translation_cache.expiresAt_ttl");
+
   // --- vector search indexes --------------------------------------------
   // Created programmatically against Atlas. Every search filters by userId as a
   // pre-filter (invariant: a vector search never returns another user's data),

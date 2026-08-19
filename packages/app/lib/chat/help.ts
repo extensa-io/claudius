@@ -1,9 +1,9 @@
-import type { Role } from "@claudius/shared";
+import { TRANSLATE_LANG_CODES, type Role } from "@claudius/shared";
 
 /**
  * The `/help` command: a client-only cheat sheet for everything the chat surface
  * can do. Claudius has accumulated a set of *typed* shortcuts (`!bang`, `?word`,
- * `$SYMBOL`) and UI toggles that are discoverable only if you already know they
+ * `&lang`, `$SYMBOL`) and UI toggles that are discoverable only if you already know they
  * exist, so this is the one place that names them all.
  *
  * Two deliberate choices:
@@ -65,11 +65,12 @@ export function buildHelpText({
   const sections: string[] = [];
 
   sections.push(
-    "## Claudius quick reference\n\nJust type a question to chat normally. These shortcuts skip the model entirely (no waiting, no daily message used).",
+    "## Claudius quick reference\n\nJust type a question to chat normally. These shortcuts take a faster path: `!bang` and a bare URL skip the model entirely, and `?` and `&` run one quick lookup that's free the second time anyone asks for the same thing.",
   );
 
   const shortcuts: string[] = [
     "**`?word`** — dictionary. `?ephemeral` returns the definition, pronunciation, and examples. Type `??` if you actually want a literal question mark first.",
+    `**\`&lang\`** — translate. \`&it good morning\` gives the Italian plus register and usage notes; \`& buon giorno\` with a space translates into English. Add a source to be explicit: \`&es>it buenos dias\`. Languages: ${TRANSLATE_LANG_CODES.map((c) => `\`${c}\``).join(", ")}.`,
     "**`!bang`** — jump straight to a site's own search. `!gh langgraph` opens GitHub results in a new tab. Works leading or trailing: `langgraph !gh`.",
     "**a bare URL** — paste `https://example.com` on its own and Claudius just opens it.",
   ];

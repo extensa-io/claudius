@@ -88,3 +88,23 @@ export {
   type QuoteCacheStore,
 } from "./quotes";
 export { QUOTE_ALIASES, type QuoteAlias } from "./defaults";
+// Phase 14: translate mode (`&` seven-language translation).
+export {
+  parseTranslateQuery,
+  buildTranslateMessages,
+  translateLangName,
+  translationCacheKey,
+  getDefaultTranslationCacheStore,
+  MemoryTranslationCacheStore,
+  MongoTranslationCacheStore,
+  TieredTranslationCacheStore,
+  TRANSLATE_LANGUAGES,
+  TRANSLATE_LANG_CODES,
+  DEFAULT_TARGET_LANG,
+  TRANSLATION_TTL_SECONDS,
+  type TranslateLang,
+  type TranslateQuery,
+  type TranslationValue,
+  type TranslationCacheStore,
+  type TranslatePromptMessages,
+} from "./translate";

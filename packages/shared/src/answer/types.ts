@@ -37,22 +37,28 @@ export type SearchSource = "brave" | "tavily";
  *     quote path in the chat route, which renders provider data directly and
  *     runs no model at all. Like `lexical`, it lives here so intent has one
  *     source of truth, not because the search engine ever sees it.
+ *   - `lingual` (Phase 14): a `&` translation. Handled by the translate path in
+ *     the chat route. Distinct from `lexical` because the two are different
+ *     tools: `?` is lexicographic and bilingual by construction, `&` is
+ *     directional across seven languages and translates phrases without
+ *     defining them.
  */
 export type Intent =
   | "navigational"
   | "informational"
   | "transactional"
   | "lexical"
-  | "market";
+  | "market"
+  | "lingual";
 
 /**
  * The intents the SEARCH engine and its cache operate on. `lexical` is served by
- * the dictionary path (Phase 10) and `market` by the quote path (Phase 13);
- * neither reaches the search cache, so both are excluded here — narrowing them
- * out keeps the search cache's key and value types honest rather than admitting
- * intents that can never be stored.
+ * the dictionary path (Phase 10), `market` by the quote path (Phase 13), and
+ * `lingual` by the translate path (Phase 14); none reaches the search cache, so
+ * all three are excluded here — narrowing them out keeps the search cache's key
+ * and value types honest rather than admitting intents that can never be stored.
  */
-export type SearchIntent = Exclude<Intent, "lexical" | "market">;
+export type SearchIntent = Exclude<Intent, "lexical" | "market" | "lingual">;
 
 /**
  * A search request into the engine. `query` is the only required field. The

@@ -25,6 +25,9 @@ export const UsageEventMetaSchema = z.object({
     // Phase 10: a `?` dictionary define/translate turn. Kept distinct from
     // `chat` so the admin dashboard can size dictionary spend on its own.
     "dictionary",
+    // Phase 14: a `&` translate turn. Distinct from `dictionary` so the admin
+    // dashboard can size the two operators' spend separately.
+    "translation",
   ]),
   /**
    * How many images this turn sent (Phase 12). Lives under `meta` so the admin

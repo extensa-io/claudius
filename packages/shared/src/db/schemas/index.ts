@@ -12,3 +12,4 @@ export * from "./job";
 export * from "./searchCache";
 export * from "./dictionaryCache";
 export * from "./quoteCache";
+export * from "./translationCache";

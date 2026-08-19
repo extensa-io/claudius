@@ -3,6 +3,7 @@ import { hasBang } from "./bangs";
 import { DEFAULT_ESCALATION_KEYWORDS } from "./defaults";
 import { parseDefineQuery } from "./dictionary";
 import { parseQuoteQuery } from "./quotes";
+import { parseTranslateQuery } from "./translate";
 import type { Intent } from "./types";
 
 /**
@@ -103,6 +104,14 @@ export function classifyIntent(
   //       path short-circuits the turn before the search engine ever runs.
   if (parseQuoteQuery(query) !== null) {
     return { intent: "market", reason: "quote_operator", highValue: false };
+  }
+
+  // (0.75) Explicit `&` translate operator → lingual (Phase 14). Beside the two
+  //        rules above and before bang for the same reason: `&` is unambiguous,
+  //        and the translate path short-circuits the turn before the search
+  //        engine ever runs.
+  if (parseTranslateQuery(query) !== null) {
+    return { intent: "lingual", reason: "translate_operator", highValue: false };
   }
 
   // (1) Explicit bang → navigational, highest-confidence signal.

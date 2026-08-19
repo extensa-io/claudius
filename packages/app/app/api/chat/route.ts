@@ -11,6 +11,7 @@ import {
   loadSearchSettings,
   parseDefineQuery,
   parseQuoteQuery,
+  parseTranslateQuery,
   resolveTurnImages,
   writeUsageEvent,
 } from "@claudius/shared";
@@ -18,6 +19,7 @@ import { auth } from "@/lib/auth";
 import { bridgeGraphEvents, createTurnProgress } from "@/lib/chat/bridge";
 import { handleDictionaryTurn } from "@/lib/chat/dictionary";
 import { handleQuoteTurn } from "@/lib/chat/quotes";
+import { handleTranslateTurn } from "@/lib/chat/translate";
 import {
   createConversation,
   getOwnedConversation,
@@ -178,6 +180,28 @@ export const POST = auth(async (req) => {
         query: quoteQuery,
         rawText: text,
         conversation,
+      });
+    }
+
+    // 3.7 Translate mode (Phase 14): a leading `&` translation routes to the
+    //     translate engine. Like the dictionary it runs its OWN gate (on a cache
+    //     miss) and its own global/content-only cache — a hit costs no model call
+    //     and consumes no daily message, a miss is a normal gated, logged turn.
+    //     Available to EVERY role including guests, unlike the quote path: this
+    //     is one short call on the user's own model, so the daily cap and the
+    //     circuit breaker already size the exposure, and no metered third-party
+    //     API is involved. Same image skip as the two paths above.
+    const translateQuery =
+      imageIds.length > 0 ? null : parseTranslateQuery(text);
+    if (translateQuery !== null) {
+      return await handleTranslateTurn({
+        userId,
+        role,
+        modelId,
+        query: translateQuery,
+        rawText: text,
+        conversation,
+        signal: req.signal,
       });
     }
 

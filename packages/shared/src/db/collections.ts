@@ -11,6 +11,7 @@ import type {
   RateLimit,
   SearchCacheEntry,
   Settings,
+  TranslationCacheEntry,
   UsageEvent,
   User,
   UserSettings,
@@ -49,6 +50,11 @@ export const COLLECTIONS = {
   // QuoteCacheEntrySchema). Its TTL is session-aware rather than fixed: seconds
   // while a market is open, half an hour once it has closed.
   quoteCache: "quote_cache",
+  // Phase 14: the translate-mode cache. GLOBAL and content-only like the three
+  // above (see TranslationCacheEntrySchema). Separate from dictionaryCache
+  // because the direction is a (source, target) pair across seven languages
+  // rather than a bilingual flip. Entries reap on an evergreen TTL.
+  translationCache: "translation_cache",
 } as const;
 
 export async function usersCol(): Promise<Collection<User>> {
@@ -105,4 +111,12 @@ export async function dictionaryCacheCol(): Promise<
 
 export async function quoteCacheCol(): Promise<Collection<QuoteCacheEntry>> {
   return (await getDb()).collection<QuoteCacheEntry>(COLLECTIONS.quoteCache);
+}
+
+export async function translationCacheCol(): Promise<
+  Collection<TranslationCacheEntry>
+> {
+  return (await getDb()).collection<TranslationCacheEntry>(
+    COLLECTIONS.translationCache,
+  );
 }
