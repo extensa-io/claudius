@@ -2,6 +2,7 @@ import { AIMessageChunk } from "@langchain/core/messages";
 import { ObjectId } from "mongodb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Conversation, InvokeGrant } from "@claudius/shared";
+import { LOOKUP_MODEL_ID } from "./lookupModel";
 
 /**
  * The dictionary turn's failure behaviour. Bedrock can drop a streaming Converse
@@ -242,6 +243,32 @@ describe("handleDictionaryTurn on a clean stream", () => {
       { inputTokens: number; outputTokens: number },
     ];
     expect(event.outputTokens).toBe(40);
+  });
+
+  it("gates on the PINNED lookup model, not the user's selection", async () => {
+    scripted = { deltas: ["**solipsist**"], throwAfter: null };
+
+    await run();
+
+    // Shared with the `&` translate path: a lookup runs on one predictable
+    // model regardless of the picker, and that pin is what keeps both operators
+    // working for guests (see lookupModel.ts).
+    const [, gatedModelId] = assertCanInvoke.mock.calls[0] as unknown as [
+      unknown,
+      string,
+    ];
+    expect(gatedModelId).toBe(LOOKUP_MODEL_ID);
+  });
+
+  it("never switches the thread's model to the pinned one", async () => {
+    scripted = { deltas: ["**solipsist**"], throwAfter: null };
+
+    await run();
+
+    const [touch] = touchConversation.mock.calls[0] as unknown as [
+      { modelId: string },
+    ];
+    expect(touch.modelId).toBe("opus");
   });
 
   it("makes no model call and consumes nothing on a cache hit", async () => {

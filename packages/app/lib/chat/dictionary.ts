@@ -24,6 +24,7 @@ import {
   writeUsageEvent,
 } from "@claudius/shared";
 import { createConversation, touchConversation } from "./conversations";
+import { LOOKUP_MODEL_ID } from "./lookupModel";
 import { generateTitle } from "./titleGen";
 import type { ClaudiusUIMessage } from "./types";
 
@@ -40,6 +41,9 @@ import type { ClaudiusUIMessage } from "./types";
  *     resolves the model, invariant #3), run one dictionary-prompted model call,
  *     stream it, write exactly one usage_events row (purpose `dictionary`), then
  *     cache the entry.
+ *
+ * The call runs on the PINNED lookup model rather than the user's picker
+ * selection, shared with the `&` translate path — see lookupModel.ts.
  *
  * The turn is persisted through the graph's message reducer (updateState), never
  * a direct checkpoint write (the checkpointer owns those collections, CLAUDE.md),
@@ -108,7 +112,7 @@ export async function handleDictionaryTurn(params: {
   // A miss is a real gated turn: resolve the grant BEFORE streaming so a tripped
   // cap or a disallowed model returns a clean error (and consumes nothing extra),
   // rather than surfacing mid-stream. A hit skips the gate entirely.
-  const grant = cached ? null : await assertCanInvoke(userId, modelId);
+  const grant = cached ? null : await assertCanInvoke(userId, LOOKUP_MODEL_ID);
 
   // Only now (after the gate passes on a miss) create a conversation for a fresh
   // chat, so a tripped cap never leaves an empty row.
@@ -265,7 +269,11 @@ export async function handleDictionaryTurn(params: {
           userId,
           conversationId: conversationObjId,
           preview: entry,
-          modelId: grant?.modelId ?? modelId,
+          // The USER'S selected model, never the pinned lookup model — see the
+          // same note in translate.ts. usage_events records what actually ran;
+          // this field is the thread's picker setting, which a lookup must not
+          // change.
+          modelId,
         });
       }
     },
