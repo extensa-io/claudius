@@ -7,12 +7,17 @@ The app is hosted at https://www.askclaudius.dev
 
 ## How to work in this repo
 
-Work strictly phase by phase. The current phase spec lives in `specs/` and is the single source of truth for scope. Do not implement features from later phases, even partially, unless the current spec says so. When a spec and this file conflict, the spec wins for scope and this file wins for conventions and invariants.
+The build is no longer organized in phases. Work from the request in front of you: implement what was asked, at the scope asked, and don't pull in adjacent features because a spec once grouped them together. The invariants and conventions below still bind every change.
 
-The `specs/` directory is private. It is gitignored and never pushed to the public repo. The five-phase arc, editorial sequencing, and design rationale inside it are part of the article series, not the codebase. Treat specs as the authoritative scope contract while working locally, but do not quote or paraphrase spec contents in commit messages, PR descriptions, code comments, or any other text that lands in the public repo. Public-facing artifacts should derive from the work itself.
-The `.resources/articles` directory is private. It is gitignored and never pushed to the public repo. Here, you will capture the article material at the end of each development phase.
+`specs/` is now a historical record, not a scope contract. The phase specs in there describe how the app got here and are useful for understanding why something is built the way it is, but they do not define current scope and are not a queue of work to pick up. Do not start a phase because a spec exists for it. Read a spec when you need the rationale behind existing code, or when I explicitly point you at one.
 
-Before marking a phase complete, verify every item under its Acceptance criteria heading and run `npm run check`.
+When I do ask for a spec-driven piece of work, say so and I'll name the spec; then that spec wins for scope, this file wins for conventions and invariants, and its Acceptance criteria are the definition of done. For anything larger than a small change, write the spec first and get my approval on it before building.
+
+`npm run check` must pass before any work is called done.
+
+The `specs/` directory is private. It is gitignored and never pushed to the public repo. The design rationale and editorial sequencing inside it are part of the article series, not the codebase. Do not quote or paraphrase spec contents in commit messages, PR descriptions, code comments, or any other text that lands in the public repo. Public-facing artifacts should derive from the work itself.
+
+The `.resources/articles` directory is private and gitignored. Article source material is captured there when I ask for it, not automatically.
 
 ## Stack
 
@@ -27,13 +32,13 @@ Before marking a phase complete, verify every item under its Acceptance criteria
 - Vercel Blob for raw file storage with direct client uploads
 - Tavily for web search
 - Zod for every external boundary (API input, env, model output parsing)
-- From Phase 5: a Railway worker service in this same monorepo under `packages/worker/`
+- A Railway worker service in this same monorepo under `packages/worker/`
 
 Install latest stable versions and consult current package documentation rather than assuming API shapes. LangChain and the AI SDK move fast; verify signatures against the installed version.
 
 ## Repo layout
 
-npm workspaces monorepo. Two packages from Phase 0, a third (`worker`) joins in Phase 5.
+npm workspaces monorepo. Three packages: `app`, `shared`, and `worker`.
 
 ```
 packages/
@@ -41,25 +46,25 @@ packages/
     app/                          Routes and UI
     lib/auth/                     Auth.js config, role resolution, allowlist
     lib/                          App-only helpers (anything Next.js-bound)
-  shared/                       Shared library, imported by app and (later) worker
+  shared/                       Shared library, imported by app and worker
     src/env.ts                    Zod-validated env schema
     src/db/                       Mongo client, collection helpers, Zod schemas, indexes
     src/agent/                    LangGraph graph, tools, prompts, checkpointer setup
     src/tiers/                    Tier definitions, enforcement middleware, circuit breaker
     src/usage/                    usage_events writers and aggregation helpers
-  worker/                       Railway worker (added in Phase 5)
-specs/                          Phase specs — private, gitignored, never pushed
+  worker/                       Railway worker
+specs/                          Historical phase specs — private, gitignored, never pushed
 ```
 
-`@claudius/shared` is consumed by `@claudius/app` via npm workspace resolution and Next.js `transpilePackages`. Anything that the Phase 5 worker will also need lives in `shared`; anything Next.js-bound (route handlers, Auth.js wiring, React components) lives in `app`.
+`@claudius/shared` is consumed by `@claudius/app` via npm workspace resolution and Next.js `transpilePackages`. Anything the worker also needs lives in `shared`; anything Next.js-bound (route handlers, Auth.js wiring, React components) lives in `app`.
 
 ## Data model
 
-Database `claudius`. Collections: `users`, `conversations`, `checkpoints`, `checkpoint_writes`, `memories`, `documents`, `chunks`, `usage_events`, `settings`, `jobs` (Phase 5). Field-level definitions live in `packages/shared/src/db/schemas.ts` once created; the authoritative design is `specs/phase-0-foundations.md`. The checkpointer owns `checkpoints` and `checkpoint_writes`; never write to them directly.
+Database `claudius`. Collections: `users`, `conversations`, `checkpoints`, `checkpoint_writes`, `memories`, `documents`, `chunks`, `usage_events`, `settings`, `jobs`. Field-level definitions live in `packages/shared/src/db/schemas/`; `specs/phase-0-foundations.md` records the original design rationale. The checkpointer owns `checkpoints` and `checkpoint_writes`; never write to them directly.
 
 ## Non-negotiable invariants
 
-These hold in every phase. Violating any of them is a bug regardless of what else works.
+These hold for every change. Violating any of them is a bug regardless of what else works.
 
 1. Every query touching user-owned data filters by `userId` at the query layer. No route, tool, or vector search may return another user's conversations, memories, documents, or chunks. Vector searches use pre-filters, never post-filtering.
 2. Roles are `admin`, `member`, `guest`. Role is resolved server-side in the Auth.js `signIn`/`jwt` callbacks from the allowlist in `settings`. The client never supplies role or tier information; the session token does.
@@ -89,12 +94,12 @@ When adding a new tool: figure out which workspaces import it (in scripts, confi
 
 ## Environment variables
 
-`MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY` (Phase 2), `TAVILY_API_KEY` (Phase 1), `BLOB_READ_WRITE_TOKEN` (Phase 2), `LANGSMITH_*` (Phase 4), `ADMIN_EMAIL` (bootstrap admin), `TWELVEDATA_API_KEY` (optional, market data for quote mode). Validate all of them in `packages/shared/src/env.ts`.
+`MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY`, `TAVILY_API_KEY`, `BRAVE_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `LANGSMITH_*`, `ADMIN_EMAIL` (bootstrap admin), `TWELVEDATA_API_KEY` (optional, market data for quote mode). Validate all of them in `packages/shared/src/env.ts`.
 
 ## Commands
 
 - `npm run dev` local development
-- `npm run check` typecheck + lint + tests (must pass before any phase is complete)
+- `npm run check` typecheck + lint + tests (must pass before any work is done)
 - `npm run db:indexes` apply index definitions idempotently
 
 ## Bedrock notes
