@@ -258,8 +258,6 @@ export function ChatApp({
       conversations={conversations}
       activeId={activeId}
       onSelect={(id) => void selectConversation(id)}
-      onNew={newChat}
-      onNewIncognito={() => newChat(true)}
       onArchive={archive}
       onDelete={remove}
       user={user}
@@ -292,8 +290,11 @@ export function ChatApp({
             modelId={modelId}
             models={models}
             incognito={isIncognito}
+            canGoIncognito={user.role !== "guest"}
             imagePolicy={imagePolicy}
             bangs={bangs}
+            onNewChat={() => newChat()}
+            onToggleIncognito={() => setPendingIncognito((v) => !v)}
             onModelChange={changeModel}
             onConversationCreated={onConversationCreated}
             onTurnComplete={onTurnComplete}

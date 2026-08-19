@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { EyeOff, PanelLeft } from "lucide-react";
+import { EyeOff, PanelLeft, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Role } from "@claudius/shared";
 import { buildHelpText, isHelpCommand, type BangView } from "@/lib/chat/help";
@@ -13,6 +13,7 @@ import type {
   ModelOption,
 } from "@/lib/chat/view-types";
 import type { JobView } from "@/lib/jobs/view";
+import { cn } from "@/lib/utils";
 import { Composer } from "./composer";
 import { MessageList } from "./message-list";
 import { ModelSelector } from "./model-selector";
@@ -35,8 +36,11 @@ export function ChatPane({
   modelId,
   models,
   incognito,
+  canGoIncognito,
   imagePolicy,
   bangs,
+  onNewChat,
+  onToggleIncognito,
   onModelChange,
   onConversationCreated,
   onTurnComplete,
@@ -58,10 +62,18 @@ export function ChatPane({
    * flag is fixed at creation.
    */
   incognito: boolean;
+  /**
+   * Whether this role gets the incognito control at all. A guest has no stored
+   * instructions and no memories to withhold, so the switch would do nothing.
+   */
+  canGoIncognito: boolean;
   /** The role's image policy, or null when the role gets no image service. */
   imagePolicy: ImagePolicyView | null;
   /** The merged bang table, listed by the `/help` cheat sheet. */
   bangs: BangView[];
+  onNewChat: () => void;
+  /** Flips the draft's incognito mode. Only ever called before the first turn. */
+  onToggleIncognito: () => void;
   onModelChange: (id: string) => void;
   onConversationCreated: (id: string, title: string) => void;
   onTurnComplete: () => void;
@@ -339,12 +351,42 @@ export function ChatPane({
           onSelect={onModelChange}
           disabled={busy}
         />
-        {incognito && (
-          <span className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
-            <EyeOff className="size-3.5" />
-            Incognito
-          </span>
-        )}
+        {/* Incognito is fixed at creation, so once this thread exists the control
+            is a read-only badge. Before the first turn it is a live toggle the
+            user can switch both ways. */}
+        {canGoIncognito &&
+          (conversationId === null ? (
+            <button
+              type="button"
+              onClick={onToggleIncognito}
+              aria-pressed={incognito}
+              title="Incognito — no memories, no saved instructions"
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
+                incognito
+                  ? "border-foreground/30 bg-accent text-foreground"
+                  : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <EyeOff className="size-3.5" />
+              Incognito
+            </button>
+          ) : (
+            incognito && (
+              <span className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
+                <EyeOff className="size-3.5" />
+                Incognito
+              </span>
+            )
+          ))}
+        <button
+          type="button"
+          onClick={onNewChat}
+          className="ml-auto flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-sm hover:bg-accent"
+        >
+          <Plus className="size-4" />
+          New
+        </button>
       </header>
 
       {/* The wording is deliberate about what incognito does NOT do. The thread

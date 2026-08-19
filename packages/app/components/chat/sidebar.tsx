@@ -5,7 +5,6 @@ import {
   Brain,
   EyeOff,
   Loader2,
-  Plus,
   Settings,
   Shield,
   Trash2,
@@ -37,8 +36,6 @@ export function Sidebar({
   conversations,
   activeId,
   onSelect,
-  onNew,
-  onNewIncognito,
   onArchive,
   onDelete,
   user,
@@ -46,17 +43,11 @@ export function Sidebar({
   conversations: ConversationSummary[];
   activeId: string | null;
   onSelect: (id: string) => void;
-  onNew: () => void;
-  onNewIncognito: () => void;
   onArchive: (id: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   user: SidebarUser;
 }): React.ReactNode {
   const visible = conversations.filter((c) => !c.archived);
-
-  // Incognito is a member/admin control. A guest has no stored instructions and
-  // no memories to withhold, so offering it would be a switch that does nothing.
-  const canGoIncognito = user.role !== "guest";
 
   // Archiving hits the network and takes a beat; track in-flight ids so the
   // button shows a spinner and ignores repeat clicks (otherwise the lack of
@@ -98,27 +89,6 @@ export function Sidebar({
         <span className="px-1 text-lg font-semibold tracking-tight">
           Claudius
         </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onNew()}
-            className="flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1.5 text-sm hover:bg-sidebar-accent"
-          >
-            <Plus className="size-4" />
-            New
-          </button>
-          {canGoIncognito && (
-            <button
-              type="button"
-              onClick={onNewIncognito}
-              aria-label="New incognito chat"
-              title="New incognito chat — no memories, no saved instructions"
-              className="rounded-md border border-sidebar-border p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-            >
-              <EyeOff className="size-4" />
-            </button>
-          )}
-        </div>
       </div>
 
       <Link
@@ -179,9 +149,11 @@ export function Sidebar({
                         {c.title}
                       </span>
                     </span>
-                    {/* Hidden on hover so the archive button can sit here
-                        without overlapping the timestamp. */}
-                    <span className="shrink-0 text-[0.7rem] text-muted-foreground group-hover:invisible">
+                    {/* The row actions occupy this same slot. On a pointer device
+                        they appear on hover, so the stamp only yields then; on
+                        touch there is no hover, so the actions are always shown
+                        and the stamp gives up the slot permanently. */}
+                    <span className="invisible shrink-0 text-[0.7rem] text-muted-foreground lg:visible lg:group-hover:invisible">
                       {relativeStamp(c.updatedAt)}
                     </span>
                   </div>
@@ -191,10 +163,10 @@ export function Sidebar({
                 </button>
                 <div
                   className={cn(
-                    "absolute top-1.5 right-1.5 flex items-center gap-0.5",
+                    "absolute top-1 right-1 flex items-center gap-0.5",
                     archiving.has(c.id) || confirmingId === c.id
                       ? "flex"
-                      : "hidden group-hover:flex",
+                      : "flex lg:hidden lg:group-hover:flex",
                   )}
                 >
                   <button
@@ -202,7 +174,7 @@ export function Sidebar({
                     aria-label="Archive conversation"
                     onClick={() => void handleArchive(c.id)}
                     disabled={archiving.has(c.id)}
-                    className="rounded p-1 text-warning hover:bg-warning/10 disabled:opacity-100"
+                    className="rounded p-2 text-warning hover:bg-warning/10 disabled:opacity-100 lg:p-1"
                   >
                     {archiving.has(c.id) ? (
                       <Loader2 className="size-3.5 animate-spin" />
@@ -214,7 +186,7 @@ export function Sidebar({
                     type="button"
                     aria-label="Delete conversation"
                     onClick={() => setConfirmingId(c.id)}
-                    className="rounded p-1 text-destructive hover:bg-destructive/10"
+                    className="rounded p-2 text-destructive hover:bg-destructive/10 lg:p-1"
                   >
                     <Trash2 className="size-3.5" />
                   </button>
