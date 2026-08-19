@@ -7,7 +7,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./documents/constants": "./src/documents/constants.ts"
+    "./documents/constants": "./src/documents/constants.ts",
+    "./answer/languages": "./src/answer/languages.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

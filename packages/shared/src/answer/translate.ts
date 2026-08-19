@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 import { translationCacheCol } from "../db/collections";
 import type { TranslationCacheEntry } from "../db/schemas";
+import {
+  DEFAULT_TARGET_LANG,
+  TRANSLATE_LANG_CODES,
+  type TranslateLang,
+  isTranslateLang,
+  translateLangName,
+} from "./languages";
 
 /**
  * Translate mode (Phase 14): a leading `&` is an explicit translation operator.
@@ -21,37 +28,17 @@ import type { TranslationCacheEntry } from "../db/schemas";
  * content-only cache. The app layer wires it into the chat route.
  */
 
-/**
- * The supported languages, declared once. The parser, the prompt builder, and
- * the help text all read this, so adding a language is a one-line edit here.
- */
-export const TRANSLATE_LANGUAGES = {
-  en: "English",
-  es: "Spanish",
-  it: "Italian",
-  pt: "Portuguese",
-  fr: "French",
-  de: "German",
-  el: "Greek",
-} as const;
-
-export type TranslateLang = keyof typeof TRANSLATE_LANGUAGES;
-
-/** The bare `&` form's target. Reading something foreign is the common case. */
-export const DEFAULT_TARGET_LANG: TranslateLang = "en";
-
-export const TRANSLATE_LANG_CODES = Object.keys(
+// The language table lives in its own dependency-free module so the client-side
+// `/help` text can read it without pulling this file's Mongo cache into the
+// browser bundle. Re-exported here so server-side callers have one import.
+export {
   TRANSLATE_LANGUAGES,
-) as TranslateLang[];
-
-function isTranslateLang(code: string): code is TranslateLang {
-  return Object.hasOwn(TRANSLATE_LANGUAGES, code);
-}
-
-/** A translation's full name, for prompts and rendered copy. */
-export function translateLangName(lang: TranslateLang): string {
-  return TRANSLATE_LANGUAGES[lang];
-}
+  TRANSLATE_LANG_CODES,
+  DEFAULT_TARGET_LANG,
+  isTranslateLang,
+  translateLangName,
+  type TranslateLang,
+} from "./languages";
 
 // A sentence or two is a legitimate translation; a document is not. Beyond this
 // many characters we fall through to normal chat so `&` never becomes a cheaper

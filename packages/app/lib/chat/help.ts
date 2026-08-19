@@ -1,4 +1,10 @@
-import { TRANSLATE_LANG_CODES, type Role } from "@claudius/shared";
+// Deep import, not the package barrel: this module is pulled in by a client
+// component, and the barrel re-exports the Mongo client and the search
+// backends. `answer/languages` is dependency-free and safe to ship to the
+// browser. A value import from the barrel here breaks `next build` (and only
+// `next build` — typecheck, lint and tests all pass on it).
+import { TRANSLATE_LANG_CODES } from "@claudius/shared/answer/languages";
+import type { Role } from "@claudius/shared";
 
 /**
  * The `/help` command: a client-only cheat sheet for everything the chat surface
