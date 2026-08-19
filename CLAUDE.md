@@ -15,6 +15,8 @@ When I do ask for a spec-driven piece of work, say so and I'll name the spec; th
 
 `npm run check` must pass before any work is called done.
 
+`npm run check` is not sufficient on its own. It runs typecheck, lint and tests, none of which walk the client bundle, so a change that touches anything under `packages/app/components/`, or any module those components import (`lib/chat/help.ts`, `lib/chat/types.ts`, and friends), also needs `npm run build` before it is pushed. A value imported from the `@claudius/shared` barrel into client-reachable code passes all three checks and then fails the Vercel build with `Module not found: Can't resolve 'net'`, because the barrel re-exports the Mongo client and the search backends. Run the build locally rather than discovering it in a deployment.
+
 The `specs/` directory is private. It is gitignored and never pushed to the public repo. The design rationale and editorial sequencing inside it are part of the article series, not the codebase. Do not quote or paraphrase spec contents in commit messages, PR descriptions, code comments, or any other text that lands in the public repo. Public-facing artifacts should derive from the work itself.
 
 The `.resources/articles` directory is private and gitignored. Article source material is captured there when I ask for it, not automatically.
@@ -84,6 +86,12 @@ These hold for every change. Violating any of them is a bug regardless of what e
 - Errors: typed result objects or thrown `AppError` with a user-safe message; never leak internals to the client
 - Indexes are defined in code (`packages/shared/src/db/indexes.ts`) and applied by an idempotent script, not created ad hoc
 
+### Client-reachable imports from `shared`
+
+Client components and anything they import must never take a VALUE from the `@claudius/shared` barrel. The barrel re-exports the env schema, the Mongo client and the search backends, so a value import drags all of it into the browser bundle and the build fails on unresolvable Node built-ins. Type-only imports (`import type`) are fine anywhere, since TypeScript erases them.
+
+When a client needs a real constant from `shared`, put it in a dependency-free leaf module, give it a subpath in the `exports` map of `packages/shared/package.json`, and deep-import that path. Existing examples: `@claudius/shared/documents/constants` for the upload caps and `@claudius/shared/answer/languages` for the translate operator's language table. Where a server module also needs the same constant, re-export the leaf from it so server callers keep one import.
+
 ### Workspace dependency ownership
 
 Every devDep needed by a workspace's build, lint, typecheck, or test runs must be declared in that workspace's `package.json`, not at the monorepo root. Root devDeps are reserved for cross-workspace orchestration (currently only `vitest` for the root test runner that walks `test.projects`).
@@ -100,6 +108,7 @@ When adding a new tool: figure out which workspaces import it (in scripts, confi
 
 - `npm run dev` local development
 - `npm run check` typecheck + lint + tests (must pass before any work is done)
+- `npm run build` production build (also required when a change is client-reachable; it is the only check that walks the browser bundle)
 - `npm run db:indexes` apply index definitions idempotently
 
 ## Bedrock notes
