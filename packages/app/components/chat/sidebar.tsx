@@ -4,6 +4,7 @@ import {
   Archive,
   Brain,
   EyeOff,
+  Hourglass,
   Loader2,
   Settings,
   Shield,
@@ -143,6 +144,16 @@ export function Sidebar({
                         <EyeOff
                           className="size-3.5 shrink-0 self-center text-muted-foreground"
                           aria-label="Incognito conversation"
+                        />
+                      )}
+                      {/* A lookup-only thread is swept a day after its last
+                          turn. Marking it is the difference between a thread
+                          that disappeared and one the user was told was
+                          temporary; asking a real question here clears it. */}
+                      {c.scratchUntil !== null && (
+                        <Hourglass
+                          className="size-3.5 shrink-0 self-center text-muted-foreground"
+                          aria-label="Temporary lookup — removed a day after the last message"
                         />
                       )}
                       <span className="truncate text-sm font-medium">

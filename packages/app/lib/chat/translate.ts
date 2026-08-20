@@ -119,7 +119,7 @@ export async function handleTranslateTurn(params: {
   const isNewConversation = params.conversation === null;
   const conversation =
     params.conversation ??
-    (await createConversation({ userId, role, modelId }));
+    (await createConversation({ userId, role, modelId, scratch: true }));
   const conversationObjId = conversation._id!;
   const threadId = conversationObjId.toString();
 
@@ -276,6 +276,9 @@ export async function handleTranslateTurn(params: {
           // moment someone typed a `&`. The usage_events row above records the
           // model that actually ran; this one records the thread's setting.
           modelId,
+          // An operator lookup keeps the thread scratch and pushes its lapse
+          // date forward; only a real question promotes it.
+          scratch: true,
         });
       }
     },

@@ -13,6 +13,10 @@
     {
       "path": "/api/cron/reset-breaker",
       "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/sweep-scratch-threads",
+      "schedule": "30 * * * *"
     }
   ]
 }

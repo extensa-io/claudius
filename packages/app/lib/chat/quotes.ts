@@ -220,7 +220,7 @@ export async function handleQuoteTurn(params: {
   const isNewConversation = params.conversation === null;
   const conversation =
     params.conversation ??
-    (await createConversation({ userId, role, modelId }));
+    (await createConversation({ userId, role, modelId, scratch: true }));
   const conversationObjId = conversation._id!;
   const threadId = conversationObjId.toString();
 
@@ -272,6 +272,9 @@ export async function handleQuoteTurn(params: {
         conversationId: conversationObjId,
         preview: block,
         modelId,
+        // An operator lookup keeps the thread scratch and pushes its lapse
+        // date forward; only a real question promotes it.
+        scratch: true,
       });
     },
   });

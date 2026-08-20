@@ -39,6 +39,25 @@ export const ConversationSchema = z.object({
    */
   incognito: z.literal(true).optional(),
   /**
+   * A scratch thread is one that has only ever held operator lookups (`?word`,
+   * `$SYMBOL`, `&lang`). Those create a conversation row exactly like a real
+   * chat does, and a sidebar full of one-off dictionary lookups buries the
+   * threads that matter. The field carries both facts at once: the thread is
+   * scratch while the key is present, and it lapses at the date inside it.
+   *
+   * Deliberately a separate field from `expiresAt` rather than a reuse, and
+   * deliberately NOT under a TTL index. MongoDB's TTL reaper deletes only the
+   * document it matches, so it would drop the conversation row and orphan the
+   * thread's checkpoints, jobs and documents. An hourly cron sweep reads this
+   * field instead and deletes through the full cascade. A guest scratch thread
+   * therefore carries both fields: `expiresAt` for guest ephemerality
+   * (invariant #4, enforced by the database) and this one for the sweep.
+   *
+   * The first normal message in the thread unsets it, permanently: asking a real
+   * question is the signal that the thread is worth keeping.
+   */
+  scratchUntil: z.date().optional(),
+  /**
    * Memory-extraction watermark (Phase 3). `lastRunAt` is when extraction last
    * processed this thread; `messageCount` is how many checkpointed messages had
    * been seen by then, so the next run extracts only the turns beyond it rather

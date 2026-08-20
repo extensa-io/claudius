@@ -19,6 +19,13 @@ import { deleteConversationDocuments } from "@/lib/documents";
 /** Guest conversations live for 24h, then the TTL index reaps them. */
 const GUEST_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * A scratch thread (operator lookups only) lapses 24h after its LAST turn, not
+ * after its creation: the clock is pushed forward on every lookup, so a thread
+ * you keep coming back to survives and one you abandon disappears.
+ */
+const SCRATCH_TTL_MS = 24 * 60 * 60 * 1000;
+
 const PREVIEW_MAX = 140;
 
 /** A conversation as the sidebar needs it: metadata only, no transcript. */
@@ -31,6 +38,8 @@ export interface ConversationSummary {
   lastMessagePreview: string | null;
   /** Normalized to a real boolean here; absent in the document means false. */
   incognito: boolean;
+  /** When this scratch thread lapses; null for a normal conversation. */
+  scratchUntil: string | null;
 }
 
 function toSummary(doc: Conversation): ConversationSummary {
@@ -42,6 +51,7 @@ function toSummary(doc: Conversation): ConversationSummary {
     updatedAt: doc.updatedAt.toISOString(),
     lastMessagePreview: doc.lastMessagePreview ?? null,
     incognito: doc.incognito === true,
+    scratchUntil: doc.scratchUntil ? doc.scratchUntil.toISOString() : null,
   };
 }
 
@@ -61,6 +71,11 @@ export async function createConversation(params: {
    * stop being it.
    */
   incognito?: boolean;
+  /**
+   * Set by the operator engines (dictionary, quote, translate) so the thread
+   * starts life as scratch and lapses unless it earns a real question.
+   */
+  scratch?: boolean;
 }): Promise<Conversation> {
   const now = new Date();
   const base: Conversation = {
@@ -73,6 +88,9 @@ export async function createConversation(params: {
     // Same omit-don't-set-undefined discipline as expiresAt below: absent is the
     // normal state, and `literal(true)` makes an explicit false a type error.
     ...(params.incognito ? { incognito: true as const } : {}),
+    ...(params.scratch
+      ? { scratchUntil: new Date(now.getTime() + SCRATCH_TTL_MS) }
+      : {}),
   };
   // Omit (not set undefined) expiresAt for non-guests: with
   // exactOptionalPropertyTypes the key's absence is what keeps the TTL away.
@@ -113,23 +131,45 @@ export async function listConversations(
   return docs.map(toSummary);
 }
 
-/** Record activity on a turn: bump updatedAt, refresh the preview, persist model. */
+/**
+ * Record activity on a turn: bump updatedAt, refresh the preview, persist model.
+ *
+ * Also the single place a thread's scratch status changes. An operator lookup
+ * pushes the lapse date forward; anything else clears it, promoting the thread to
+ * a real conversation for good.
+ */
 export async function touchConversation(params: {
   userId: ObjectId;
   conversationId: ObjectId;
   preview: string;
   modelId: string;
+  /** True when this turn was an operator lookup (`?`, `$`, `&`). */
+  scratch?: boolean;
 }): Promise<void> {
   const col = await conversationsCol();
+  const filter = { _id: params.conversationId, userId: params.userId };
+  const $set = {
+    updatedAt: new Date(),
+    lastMessagePreview: params.preview.slice(0, PREVIEW_MAX),
+    modelId: params.modelId,
+  };
+
+  if (!params.scratch) {
+    // A real question promotes the thread. $unset on a document that never had
+    // the field is a no-op, so this needs no guard and no branch on the current
+    // state. Note it clears ONLY scratchUntil: a guest's expiresAt stays put, so
+    // promoting a thread never makes guest data permanent (invariant #4).
+    await col.updateOne(filter, { $set, $unset: { scratchUntil: "" } });
+    return;
+  }
+
+  await col.updateOne(filter, { $set });
+  // Refreshing the clock is a separate, guarded write: the $exists check means a
+  // `?` lookup typed inside an already-promoted thread cannot re-arm the timer
+  // and schedule a real conversation for deletion. Promotion is one-way.
   await col.updateOne(
-    { _id: params.conversationId, userId: params.userId },
-    {
-      $set: {
-        updatedAt: new Date(),
-        lastMessagePreview: params.preview.slice(0, PREVIEW_MAX),
-        modelId: params.modelId,
-      },
-    },
+    { ...filter, scratchUntil: { $exists: true } },
+    { $set: { scratchUntil: new Date(Date.now() + SCRATCH_TTL_MS) } },
   );
 }
 
@@ -211,6 +251,54 @@ export async function deleteConversation(
   await deleteThreadCheckpoints(conversationId);
 
   await col.deleteOne({ _id, userId });
+}
+
+/** How many lapsed threads one sweep will clear, so a run stays bounded. */
+const SWEEP_LIMIT = 500;
+
+/**
+ * Delete every scratch thread whose lapse date has passed.
+ *
+ * This exists instead of a TTL index on `scratchUntil` because MongoDB's TTL
+ * reaper removes only the document it matches. A conversation is the root of a
+ * small tree — attached documents and their chunks, jobs, and the entire
+ * checkpointed transcript — so a bare TTL would delete the row and leave the
+ * rest behind with nothing left to point at it. Routing through
+ * deleteConversation reuses the same cascade the delete button uses.
+ *
+ * The find is intentionally NOT scoped to one user: this is a system sweep, not
+ * a user-facing read, so invariant #1 does not apply to it. Every delete still
+ * passes the owning userId back into the cascade, so an ownership bug here
+ * cannot cross accounts.
+ *
+ * One conversation failing must not strand the rest, so failures are logged and
+ * skipped. The row keeps its lapsed date and is retried on the next run.
+ */
+export async function sweepScratchThreads(): Promise<{
+  deleted: number;
+  failed: number;
+}> {
+  const col = await conversationsCol();
+  const lapsed = await col
+    .find({ scratchUntil: { $lte: new Date() } })
+    .limit(SWEEP_LIMIT)
+    .toArray();
+
+  let deleted = 0;
+  let failed = 0;
+  for (const doc of lapsed) {
+    try {
+      await deleteConversation(doc.userId, doc._id!.toString());
+      deleted += 1;
+    } catch (err) {
+      failed += 1;
+      console.error(
+        `Scratch sweep failed for conversation ${doc._id!.toString()}:`,
+        err instanceof Error ? `${err.name}: ${err.message}` : err,
+      );
+    }
+  }
+  return { deleted, failed };
 }
 
 export { toSummary };

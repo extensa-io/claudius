@@ -214,6 +214,12 @@ export function ChatApp({
                 // Mirrors what the server just stored for this thread; the next
                 // refreshConversations replaces this row with the real one.
                 incognito: pendingIncognito,
+                // Left null rather than detecting an operator prefix here. Only
+                // the server knows whether this turn actually resolved as a
+                // lookup (a `$` from a guest falls through to a normal turn, for
+                // one), and the refresh on turn completion brings back the real
+                // row moments later.
+                scratchUntil: null,
               },
               ...prev,
             ],

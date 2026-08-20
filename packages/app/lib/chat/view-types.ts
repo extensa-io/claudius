@@ -14,6 +14,13 @@ export interface ConversationSummary {
   lastMessagePreview: string | null;
   /** Started as an incognito thread: no memories, no authored instructions. */
   incognito: boolean;
+  /**
+   * When this thread lapses, or null for a normal conversation. Set while the
+   * thread has only ever held operator lookups; the sidebar marks those rows so
+   * a thread that is about to be swept looks temporary instead of vanishing
+   * without warning.
+   */
+  scratchUntil: string | null;
 }
 
 export interface ModelOption {

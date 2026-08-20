@@ -55,6 +55,17 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
   created.push("conversations.expiresAt_ttl");
 
+  // Scratch threads (operator lookups only) are swept by an hourly cron, and
+  // this index is what makes "everything lapsed" a bounded lookup instead of a
+  // collection scan. It is a PLAIN index on purpose: adding expireAfterSeconds
+  // would hand the job to MongoDB's TTL reaper, which deletes only the
+  // conversation document and would orphan the thread's checkpoints, jobs and
+  // attached documents. The sweep exists so the delete runs the full cascade.
+  await db
+    .collection(COLLECTIONS.conversations)
+    .createIndex({ scratchUntil: 1 }, { name: "scratchUntil_sweep" });
+  created.push("conversations.scratchUntil_sweep");
+
   await db
     .collection(COLLECTIONS.memories)
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });

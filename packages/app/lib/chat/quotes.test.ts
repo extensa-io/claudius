@@ -115,6 +115,13 @@ describe("handleQuoteTurn — an instrument", () => {
     expect(writeUsageEvent).not.toHaveBeenCalled();
   });
 
+  it("keeps the thread scratch, so a bare lookup does not clutter the sidebar", async () => {
+    await run("$MDB");
+    expect(touchConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ scratch: true }),
+    );
+  });
+
   it("caches the fetched value with the open-market TTL", async () => {
     await run("$MDB");
     expect(cacheSet).toHaveBeenCalledTimes(1);
