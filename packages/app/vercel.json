@@ -15,7 +15,7 @@
       "schedule": "5 0 * * *"
     },
     {
-      "path": "/api/cron/sweep-scratch-threads",
+      "path": "/api/cron/sweep-expired-threads",
       "schedule": "30 * * * *"
     }
   ]

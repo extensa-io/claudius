@@ -68,7 +68,7 @@ vi.mock("@/lib/documents", () => ({
 const {
   createConversation,
   deleteConversation,
-  sweepScratchThreads,
+  sweepExpiredThreads,
   touchConversation,
 } = await import("./conversations");
 
@@ -113,6 +113,17 @@ describe("createConversation", () => {
     });
     const doc = insertOne.mock.calls[0]![0];
     expect(doc.expiresAt).toBeInstanceOf(Date);
+  });
+
+  it("dates a guest thread an hour past the 24h it is promised", async () => {
+    // The extra hour is the sweep's exclusive window: it claims the thread one
+    // hour before this date, so the guest still gets ~24h and the TTL index
+    // never gets there first. See SWEEP_LOOKAHEAD_MS.
+    await createConversation({ userId, role: "guest", modelId: "m" });
+    const { expiresAt } = insertOne.mock.calls[0]![0];
+    const hoursOut = (expiresAt!.getTime() - Date.now()) / 3_600_000;
+    expect(hoursOut).toBeGreaterThan(24);
+    expect(hoursOut).toBeLessThanOrEqual(25);
   });
 });
 
@@ -173,13 +184,30 @@ describe("scratch threads", () => {
   });
 });
 
-describe("sweepScratchThreads", () => {
-  it("asks only for threads whose date has passed", async () => {
-    await sweepScratchThreads();
-    const filter = sweepFind.mock.calls[0]![0] as {
-      scratchUntil: { $lte: Date };
-    };
-    expect(filter.scratchUntil.$lte).toBeInstanceOf(Date);
+describe("sweepExpiredThreads", () => {
+  type SweepFilter = {
+    $or: [{ scratchUntil: { $lte: Date } }, { expiresAt: { $lte: Date } }];
+  };
+
+  it("asks for lapsed scratch threads and guest threads nearing expiry", async () => {
+    await sweepExpiredThreads();
+    const filter = sweepFind.mock.calls[0]![0] as SweepFilter;
+    const [scratch, guest] = filter.$or;
+    expect(scratch.scratchUntil.$lte).toBeInstanceOf(Date);
+    expect(guest.expiresAt.$lte).toBeInstanceOf(Date);
+  });
+
+  it("reaches a guest thread an hour before its stored expiry", async () => {
+    // The whole point of the lookahead: the TTL reaper wakes every 60s, so a
+    // date this sweep shares with it would go to the TTL, which skips the
+    // cascade. Claiming the thread early keeps the sweep ahead.
+    await sweepExpiredThreads();
+    const filter = sweepFind.mock.calls[0]![0] as SweepFilter;
+    const [scratch, guest] = filter.$or;
+    const hoursAhead =
+      (guest.expiresAt.$lte.getTime() - scratch.scratchUntil.$lte.getTime()) /
+      3_600_000;
+    expect(hoursAhead).toBeCloseTo(1, 3);
   });
 
   it("deletes each lapsed thread through the full cascade", async () => {
@@ -187,7 +215,7 @@ describe("sweepScratchThreads", () => {
     sweepFind.mockReturnValue([{ _id: doomed, userId } as Conversation]);
     findOne.mockResolvedValue({ _id: doomed } as Conversation);
 
-    const result = await sweepScratchThreads();
+    const result = await sweepExpiredThreads();
 
     expect(result).toEqual({ deleted: 1, failed: 0 });
     // The point of the sweep over a TTL index: the checkpoints go too.
@@ -208,7 +236,7 @@ describe("sweepScratchThreads", () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue({ _id: good } as Conversation);
 
-    expect(await sweepScratchThreads()).toEqual({ deleted: 1, failed: 1 });
+    expect(await sweepExpiredThreads()).toEqual({ deleted: 1, failed: 1 });
   });
 });
 

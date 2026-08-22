@@ -16,8 +16,27 @@ import { deleteConversationDocuments } from "@/lib/documents";
  * that filtering is impossible to forget at a call site.
  */
 
-/** Guest conversations live for 24h, then the TTL index reaps them. */
-const GUEST_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * A guest conversation is meant to last 24h. `expiresAt` is stored an hour
+ * beyond that on purpose, because two things can delete it and they are not
+ * equivalent.
+ *
+ * The sweep is the one we want: it runs the full cascade, so the thread's
+ * checkpoints and jobs go with it. The TTL index on `expiresAt` is the backstop:
+ * it deletes only the conversation row and orphans the rest, which is how three
+ * dead threads came to be holding 56 checkpoints between them.
+ *
+ * MongoDB's TTL reaper wakes every 60 seconds and the sweep runs hourly, so a
+ * date they both target would go to the TTL essentially every time. Storing it
+ * an hour late and having the sweep claim guest threads once they are within an
+ * hour of it (SWEEP_LOOKAHEAD_MS) gives the sweep a full hour of exclusive
+ * window. Effective guest lifetime is unchanged at roughly 24h, and invariant #4
+ * still holds: the database, not the cron, is what guarantees the data goes.
+ */
+const GUEST_TTL_MS = 25 * 60 * 60 * 1000;
+
+/** How far ahead of `expiresAt` the sweep claims a guest thread. */
+const SWEEP_LOOKAHEAD_MS = 60 * 60 * 1000;
 
 /**
  * A scratch thread (operator lookups only) lapses 24h after its LAST turn, not
@@ -257,14 +276,21 @@ export async function deleteConversation(
 const SWEEP_LIMIT = 500;
 
 /**
- * Delete every scratch thread whose lapse date has passed.
+ * Delete every conversation that has run out of time: scratch threads whose
+ * lapse date has passed, and guest threads about to hit their `expiresAt`.
  *
- * This exists instead of a TTL index on `scratchUntil` because MongoDB's TTL
- * reaper removes only the document it matches. A conversation is the root of a
- * small tree — attached documents and their chunks, jobs, and the entire
- * checkpointed transcript — so a bare TTL would delete the row and leave the
- * rest behind with nothing left to point at it. Routing through
- * deleteConversation reuses the same cascade the delete button uses.
+ * Both kinds exist because MongoDB's TTL reaper removes only the document it
+ * matches. A conversation is the root of a small tree — attached documents and
+ * their chunks, jobs, and the entire checkpointed transcript — so a bare TTL
+ * deletes the row and leaves the rest behind with nothing pointing at it. Routing
+ * through deleteConversation reuses the same cascade the delete button uses.
+ *
+ * The two dates are treated differently for one reason. `scratchUntil` carries no
+ * TTL index, so the sweep is its only reaper and "already lapsed" is the right
+ * question. `expiresAt` does carry one, and that reaper wakes every 60 seconds
+ * against this sweep's hourly run, so the sweep has to get there first: it claims
+ * a guest thread as soon as it is within SWEEP_LOOKAHEAD_MS of the stored date,
+ * which is itself an hour past the 24h the guest is actually promised.
  *
  * The find is intentionally NOT scoped to one user: this is a system sweep, not
  * a user-facing read, so invariant #1 does not apply to it. Every delete still
@@ -272,15 +298,22 @@ const SWEEP_LIMIT = 500;
  * cannot cross accounts.
  *
  * One conversation failing must not strand the rest, so failures are logged and
- * skipped. The row keeps its lapsed date and is retried on the next run.
+ * skipped. The row keeps its lapsed date and is retried on the next run — or, for
+ * a guest thread the sweep keeps failing on, the TTL backstop eventually takes it.
  */
-export async function sweepScratchThreads(): Promise<{
+export async function sweepExpiredThreads(): Promise<{
   deleted: number;
   failed: number;
 }> {
   const col = await conversationsCol();
+  const now = Date.now();
   const lapsed = await col
-    .find({ scratchUntil: { $lte: new Date() } })
+    .find({
+      $or: [
+        { scratchUntil: { $lte: new Date(now) } },
+        { expiresAt: { $lte: new Date(now + SWEEP_LOOKAHEAD_MS) } },
+      ],
+    })
     .limit(SWEEP_LIMIT)
     .toArray();
 
@@ -293,7 +326,7 @@ export async function sweepScratchThreads(): Promise<{
     } catch (err) {
       failed += 1;
       console.error(
-        `Scratch sweep failed for conversation ${doc._id!.toString()}:`,
+        `Expiry sweep failed for conversation ${doc._id!.toString()}:`,
         err instanceof Error ? `${err.name}: ${err.message}` : err,
       );
     }
