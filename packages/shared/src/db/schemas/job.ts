@@ -118,10 +118,20 @@ const baseJobFields = {
   startedAt: z.date().nullable(),
   finishedAt: z.date().nullable(),
   /**
-   * Guest-owned jobs (memory extraction on an ephemeral guest conversation)
-   * carry expiresAt for the TTL index, mirroring the invariant on conversations
-   * and memories. Member/admin jobs omit it and are kept. Guests never create
-   * research jobs, so a research job never has this field.
+   * The TTL field, set in two different situations:
+   *
+   *   - At enqueue, for guest-owned jobs (memory extraction on an ephemeral
+   *     guest conversation), mirroring the invariant on conversations and
+   *     memories. Guests never create research jobs.
+   *   - At completion, for the two memory job types regardless of owner: once
+   *     finished they are an audit trail nothing reads, and they are the only
+   *     types that accumulate on a schedule rather than on a user action, so
+   *     they reap 30 days after they finish (see jobs/progress.ts). A guest's
+   *     shorter expiry is never extended.
+   *
+   * A research job therefore never carries this field and is kept forever: its
+   * `result.sources` exists nowhere else, and the refine path reads the parent
+   * job's question and report.
    */
   expiresAt: z.date().optional(),
 } as const;

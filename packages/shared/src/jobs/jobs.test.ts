@@ -138,6 +138,42 @@ describe("terminal transitions are cancellation-safe", () => {
     expect(filter.status).toBe("running");
   });
 
+  it("stamps a 30-day expiresAt on finished memory jobs only, without extending a guest's", async () => {
+    // The retention rule can't be a plain value: it depends on the document's
+    // own type and existing expiresAt, so the terminal write is a pipeline
+    // update. Assert the expression, since the faked collection can't evaluate
+    // it. See jobs/progress.ts for why research jobs are exempt.
+    await completeJob(new ObjectId(), {
+      created: 1,
+      superseded: 0,
+      skipped: 0,
+      status: "ok",
+    });
+    const [, pipeline] = updateOne.mock.calls[0] ?? [];
+    const set = pipeline[0].$set;
+    const [condition, whenReapable, otherwise] = set.expiresAt.$cond;
+
+    // Only the two memory types reap; research falls through to its own
+    // (missing) expiresAt, which an aggregation $set omits rather than adds.
+    expect(condition).toEqual({
+      $in: ["$type", ["memory_extraction", "memory_consolidation"]],
+    });
+    expect(otherwise).toBe("$expiresAt");
+
+    // $ifNull, not a bare date: a guest job already carries a short expiry from
+    // enqueue and this must never push it out to 30 days.
+    const [existing, fallback] = whenReapable.$ifNull;
+    expect(existing).toBe("$expiresAt");
+    const days = (fallback.getTime() - set.finishedAt.getTime()) / 86_400_000;
+    expect(days).toBeCloseTo(30);
+  });
+
+  it("applies the same retention rule to a failed job", async () => {
+    await failJob(new ObjectId(), "boom");
+    const [, pipeline] = updateOne.mock.calls[0] ?? [];
+    expect(pipeline[0].$set.expiresAt.$cond).toBeDefined();
+  });
+
   it("treats a cancelled job as cancelled", async () => {
     findOne.mockResolvedValue({ status: "cancelled" });
     expect(await isJobCancelled(new ObjectId())).toBe(true);

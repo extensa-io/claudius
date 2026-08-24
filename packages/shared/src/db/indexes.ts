@@ -120,8 +120,10 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     );
   created.push("jobs.userId_conversationId_createdAt");
 
-  // Guest memory-extraction jobs carry expiresAt; the same TTL pattern reaps
-  // them so the coordination collection never accumulates ephemeral guest work.
+  // The same TTL pattern serves two retention rules on one field: guest
+  // extraction jobs get an expiresAt at enqueue, and BOTH memory job types get
+  // one 30 days out when they finish, whoever owns them. Research jobs never
+  // carry the field and are kept (see jobs/progress.ts for why).
   await db
     .collection(COLLECTIONS.jobs)
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
