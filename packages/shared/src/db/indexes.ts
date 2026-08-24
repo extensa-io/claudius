@@ -173,6 +173,29 @@ export async function applyIndexes(db: Db): Promise<ApplyResult> {
     .createIndex({ expiresAt: 1 }, { name: "expiresAt_ttl", expireAfterSeconds: 0 });
   created.push("translation_cache.expiresAt_ttl");
 
+  // --- checkpoint_writes: the checkpointer's pending-writes collection ---
+  // The checkpointer owns these documents (we never read or write them
+  // directly), but it does not create its own indexes, so the queries it issues
+  // against a growing collection are ours to support. Both index specs cover the
+  // same three fields in different orders on purpose: the checkpointer's access
+  // patterns lead with different equality fields, and MongoDB can only use a
+  // compound index when the query's equality fields are a prefix of it.
+  await db
+    .collection(COLLECTIONS.checkpointWrites)
+    .createIndex(
+      { checkpoint_ns: 1, thread_id: 1, checkpoint_id: 1 },
+      { name: "checkpoint_ns_thread_id_checkpoint_id" },
+    );
+  created.push("checkpoint_writes.checkpoint_ns_thread_id_checkpoint_id");
+
+  await db
+    .collection(COLLECTIONS.checkpointWrites)
+    .createIndex(
+      { checkpoint_id: 1, checkpoint_ns: 1, thread_id: 1 },
+      { name: "checkpoint_id_checkpoint_ns_thread_id" },
+    );
+  created.push("checkpoint_writes.checkpoint_id_checkpoint_ns_thread_id");
+
   // --- vector search indexes --------------------------------------------
   // Created programmatically against Atlas. Every search filters by userId as a
   // pre-filter (invariant: a vector search never returns another user's data),

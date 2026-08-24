@@ -55,6 +55,10 @@ export const COLLECTIONS = {
   // because the direction is a (source, target) pair across seven languages
   // rather than a bilingual flip. Entries reap on an evergreen TTL.
   translationCache: "translation_cache",
+  // Owned by the LangGraph MongoDB checkpointer: we never read or write these
+  // documents directly, so there is no typed accessor and no schema. The name
+  // lives here only so index definitions can reference it.
+  checkpointWrites: "checkpoint_writes",
 } as const;
 
 export async function usersCol(): Promise<Collection<User>> {
