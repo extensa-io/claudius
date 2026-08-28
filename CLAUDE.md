@@ -103,13 +103,17 @@ When adding a new tool: figure out which workspaces import it (in scripts, confi
 
 ### The mongodb peer override
 
-Two packages declare a peer dependency on driver 6 while this repo runs driver 7: `@auth/mongodb-adapter` (`mongodb@^6`) and `@langchain/langgraph-checkpoint-mongodb` (`mongodb@^6.21.0`). Without a root `overrides` block, a clean `npm install` fails outright with `ERESOLVE`. Both entries are load-bearing; dropping either one reintroduces the failure.
+Two packages want driver 6 while this repo runs driver 7. `@auth/mongodb-adapter` declares it as a peer dependency (`mongodb@^6`); `@langchain/langgraph-checkpoint-mongodb` declares it as a real dependency (`mongodb@^6.21.0`). The override covers both kinds, but the difference matters: without an entry the adapter produces a loud `ERESOLVE`, whereas the checkpointer quietly installs its own nested copy. Both entries are load-bearing; dropping either one reintroduces its failure mode.
 
 The failure is invisible locally. `npm install` only does a full peer resolution against a clean tree, so with `node_modules` already present it reports "up to date" and typecheck, lint, tests and even `next build` all reuse the existing tree. Vercel installs into an empty container, does the full resolve, and hard-fails. To check an override change, copy every workspace `package.json` to a scratch directory **without** the lockfile, run `npm install --ignore-scripts`, and require zero peer warnings plus an `npm ls mongodb` free of `invalid:` markers. With the lockfile copied across, the check passes even when the override is broken.
 
 The versions in the override are literal and must be bumped in lockstep with the `mongodb` range in the three workspaces. npm's `$mongodb` self-reference does not work here: it resolves against the root package's own `dependencies`, and this root has none, so it fails with `Unable to resolve reference $mongodb`. Adding a root `mongodb` dependency purely to feed the reference would contradict the ownership rule above.
 
 Rejected alternatives: `--legacy-peer-deps` disables peer checking repo-wide and silently drops optional peers; setting it as a Vercel `installCommand` would make local and deployed resolution diverge, so a conflict could pass locally and still break the deploy.
+
+**Changing any of these versions requires regenerating the lockfile from scratch.** npm's incremental resolver cannot apply these overrides to a package it is adding in the same pass. Bumping the driver alone fails with `ERESOLVE`; bumping the driver together with the adapter and checkpointer silently yields a tree with a nested `mongodb@6` under the checkpointer while the workspaces run 7, which means two drivers in one process and the checkpointer operating on a client built by the other one. Re-running `npm install` does not converge, it reports "up to date" over the wrong tree, and doing the refresh as a separate earlier commit does not help either.
+
+The procedure is to delete `package-lock.json` and every `node_modules`, reinstall, and then confirm with `npm ls mongodb` that exactly one driver version appears, hoisted, with both dependents marked `overridden` and no `invalid:` markers. `npm install --package-lock-only` is not a substitute; it still reads an existing `node_modules` and reproduces the bad tree. Expect the regenerated lockfile to carry the rest of the tree forward within its existing caret ranges, which is a large diff and is normal for this operation.
 
 ## Environment variables
 

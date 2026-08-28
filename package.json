@@ -33,10 +33,10 @@
   },
   "overrides": {
     "@auth/mongodb-adapter": {
-      "mongodb": "7.3.0"
+      "mongodb": "7.6.0"
     },
     "@langchain/langgraph-checkpoint-mongodb": {
-      "mongodb": "7.3.0"
+      "mongodb": "7.6.0"
     }
   }
 }
