@@ -15,7 +15,7 @@ When I do ask for a spec-driven piece of work, say so and I'll name the spec; th
 
 `npm run check` must pass before any work is called done.
 
-`npm run check` is not sufficient on its own. It runs typecheck, lint and tests, none of which walk the client bundle, so a change that touches anything under `packages/app/components/`, or any module those components import (`lib/chat/help.ts`, `lib/chat/types.ts`, and friends), also needs `npm run build` before it is pushed. A value imported from the `@claudius/shared` barrel into client-reachable code passes all three checks and then fails the Vercel build with `Module not found: Can't resolve 'net'`, because the barrel re-exports the Mongo client and the search backends. Run the build locally rather than discovering it in a deployment.
+`npm run check` is not sufficient on its own. It runs typecheck, lint and tests, none of which walk the client bundle, so a change that touches anything under `packages/app/components/`, or any module those components import (`lib/chat/help.ts`, `lib/chat/types.ts`, and friends), also needs `npm run build` before it is pushed. A value imported from the `@claudius/shared` barrel into client-reachable code passes all three checks and then fails the Vercel build with `Module not found: Can't resolve 'net'`, because the barrel re-exports the Mongo client and the search backends. Run the build locally rather than discovering it in a deployment. See Commands for the env wrapper the build needs locally.
 
 The `specs/` directory is private. It is gitignored and never pushed to the public repo. The design rationale and editorial sequencing inside it are part of the article series, not the codebase. Do not quote or paraphrase spec contents in commit messages, PR descriptions, code comments, or any other text that lands in the public repo. Public-facing artifacts should derive from the work itself.
 
@@ -40,7 +40,7 @@ Install latest stable versions and consult current package documentation rather 
 
 ## Repo layout
 
-npm workspaces monorepo. Three packages: `app`, `shared`, and `worker`.
+npm workspaces monorepo. Three npm workspaces: `app`, `shared`, and `worker`. `packages/android` sits alongside them but is not a workspace: it is a Trusted Web Activity wrapper built with Gradle, it has no `package.json`, and npm ignores it despite the `packages/*` glob.
 
 ```
 packages/
@@ -55,6 +55,7 @@ packages/
     src/tiers/                    Tier definitions, enforcement middleware, circuit breaker
     src/usage/                    usage_events writers and aggregation helpers
   worker/                       Railway worker
+  android/                      Trusted Web Activity wrapper (Gradle, not an npm workspace)
 specs/                          Historical phase specs — private, gitignored, never pushed
 ```
 
@@ -100,6 +101,16 @@ Why: Vercel's monorepo install scopes to the Root Directory workspace's declared
 
 When adding a new tool: figure out which workspaces import it (in scripts, config files, source, or tests) and declare it as a devDep in each one. If it is only used at root, declare it at root and nowhere else.
 
+### The mongodb peer override
+
+Two packages declare a peer dependency on driver 6 while this repo runs driver 7: `@auth/mongodb-adapter` (`mongodb@^6`) and `@langchain/langgraph-checkpoint-mongodb` (`mongodb@^6.21.0`). Without a root `overrides` block, a clean `npm install` fails outright with `ERESOLVE`. Both entries are load-bearing; dropping either one reintroduces the failure.
+
+The failure is invisible locally. `npm install` only does a full peer resolution against a clean tree, so with `node_modules` already present it reports "up to date" and typecheck, lint, tests and even `next build` all reuse the existing tree. Vercel installs into an empty container, does the full resolve, and hard-fails. To check an override change, copy every workspace `package.json` to a scratch directory **without** the lockfile, run `npm install --ignore-scripts`, and require zero peer warnings plus an `npm ls mongodb` free of `invalid:` markers. With the lockfile copied across, the check passes even when the override is broken.
+
+The versions in the override are literal and must be bumped in lockstep with the `mongodb` range in the three workspaces. npm's `$mongodb` self-reference does not work here: it resolves against the root package's own `dependencies`, and this root has none, so it fails with `Unable to resolve reference $mongodb`. Adding a root `mongodb` dependency purely to feed the reference would contradict the ownership rule above.
+
+Rejected alternatives: `--legacy-peer-deps` disables peer checking repo-wide and silently drops optional peers; setting it as a Vercel `installCommand` would make local and deployed resolution diverge, so a conflict could pass locally and still break the deploy.
+
 ## Environment variables
 
 `MONGODB_URI`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `VOYAGE_API_KEY`, `TAVILY_API_KEY`, `BRAVE_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `LANGSMITH_*`, `ADMIN_EMAIL` (bootstrap admin), `TWELVEDATA_API_KEY` (optional, market data for quote mode). Validate all of them in `packages/shared/src/env.ts`.
@@ -108,7 +119,7 @@ When adding a new tool: figure out which workspaces import it (in scripts, confi
 
 - `npm run dev` local development
 - `npm run check` typecheck + lint + tests (must pass before any work is done)
-- `npm run build` production build (also required when a change is client-reachable; it is the only check that walks the browser bundle)
+- `npm run build` production build (also required when a change is client-reachable; it is the only check that walks the browser bundle). Unlike `dev`, this script does not load `.env`, so it fails locally at page-data collection with `Invalid environment configuration`. Run it as `npx dotenv-cli -e ../../.env -- next build` from `packages/app`. Vercel is unaffected because it injects env itself.
 - `npm run db:indexes` apply index definitions idempotently
 
 ## Bedrock notes
