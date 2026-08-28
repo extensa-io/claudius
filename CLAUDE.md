@@ -23,7 +23,7 @@ The `.resources/articles` directory is private and gitignored. Article source ma
 
 ## Stack
 
-- Next.js (App Router) on Vercel, TypeScript strict mode everywhere
+- Next.js 16 (App Router, Turbopack) on Vercel, TypeScript strict mode everywhere
 - Auth.js v5 (`next-auth@beta`) with Google provider and `@auth/mongodb-adapter`
 - MongoDB Atlas: application data, LangGraph checkpoints, Atlas Vector Search
 - LangGraph JS (`@langchain/langgraph`) as the agent runtime
@@ -100,6 +100,16 @@ Every devDep needed by a workspace's build, lint, typecheck, or test runs must b
 Why: Vercel's monorepo install scopes to the Root Directory workspace's declared deps. Anything sitting only at root is invisible to `next build` and surfaces as a `Cannot find module` error during the deployed TypeScript check. Duplication between root and workspace is fine — npm dedupes via the lockfile — but each workspace must self-declare what its scripts and config files import.
 
 When adding a new tool: figure out which workspaces import it (in scripts, config files, source, or tests) and declare it as a devDep in each one. If it is only used at root, declare it at root and nowhere else.
+
+### ESLint is pinned to 9, and cannot move to 10
+
+All three workspaces pin `eslint` to `~9.39.5` rather than a caret range. This is deliberate and must not be "fixed". `eslint-config-next@16` depends on `eslint-plugin-import` and `eslint-plugin-jsx-a11y`, both of which cap at `eslint ^9`, so installing ESLint 10 leaves unmet peers. npm simultaneously reports 9.x as end of life on every install. There is no clean option here; the deprecation warning is expected and is the lesser problem. The `@next/codemod upgrade` run installs ESLint 10 on its own, so check this after any future Next upgrade.
+
+Relatedly, `next lint` no longer exists in 16 and the `eslint` key in `next.config.ts` is gone with it, so **`next build` does not lint at all**. Linting only happens via `npm run lint`.
+
+`packages/app/eslint.config.mjs` imports `eslint-config-next/core-web-vitals` and `eslint-config-next/typescript` directly. Do not reintroduce the `FlatCompat` shim: v16 ships native flat config, and routing it through `FlatCompat` fails with `Converting circular structure to JSON` instead of a readable error.
+
+That file also downgrades `react-hooks/refs` and `react-hooks/set-state-in-effect` to warnings. `eslint-config-next@16` enables these React Compiler rules as errors, and they flag performance smells rather than Next 16 incompatibilities. The five current hits all predate the upgrade. Reworking them is worthwhile but belongs in its own change, where the affected effects can be read against their tests first.
 
 ### The mongodb peer override
 

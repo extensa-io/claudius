@@ -6,11 +6,11 @@ A personal Claude-style chat app for authorized users with a capped public guest
 
 ## Stack
 
-Next.js App Router (TypeScript strict), Auth.js v5, MongoDB Atlas (app data, LangGraph checkpoints, Vector Search), LangGraph JS, AWS Bedrock (Claude via cross-region inference), Vercel AI SDK, Voyage AI embeddings, Tavily web search, Vercel Blob, deployed on Vercel with a Railway worker arriving in Phase 4.
+Next.js 16 App Router with Turbopack (TypeScript strict), Auth.js v5, MongoDB Atlas (app data, LangGraph checkpoints, Vector Search), LangGraph JS, AWS Bedrock (Claude via cross-region inference), Vercel AI SDK, Voyage AI embeddings, Tavily web search, Vercel Blob, deployed on Vercel alongside a Railway worker.
 
 ## Development
 
-Requires Node 20 or newer.
+Requires Node 22 or newer.
 
 ```bash
 npm install
