@@ -15,7 +15,7 @@ When I do ask for a spec-driven piece of work, say so and I'll name the spec; th
 
 `npm run check` must pass before any work is called done.
 
-`npm run check` is not sufficient on its own. It runs typecheck, lint and tests, none of which walk the client bundle, so a change that touches anything under `packages/app/components/`, or any module those components import (`lib/chat/help.ts`, `lib/chat/types.ts`, and friends), also needs `npm run build` before it is pushed. A value imported from the `@claudius/shared` barrel into client-reachable code passes all three checks and then fails the Vercel build with `Module not found: Can't resolve 'net'`, because the barrel re-exports the Mongo client and the search backends. Run the build locally rather than discovering it in a deployment. See Commands for the env wrapper the build needs locally.
+`npm run check` runs typecheck, lint, tests **and the production build**, in that order. The build is part of the gate because none of the other three walk the client bundle: a value imported from the `@claudius/shared` barrel into client-reachable code passes typecheck, lint and tests, then fails the Vercel build with `Module not found: Can't resolve 'net'`, because the barrel re-exports the Mongo client and the search backends. The build is the only check that catches it, so it runs on every change rather than being left to judgement about which changes are "client-reachable".
 
 The `specs/` directory is private. It is gitignored and never pushed to the public repo. The design rationale and editorial sequencing inside it are part of the article series, not the codebase. Do not quote or paraphrase spec contents in commit messages, PR descriptions, code comments, or any other text that lands in the public repo. Public-facing artifacts should derive from the work itself.
 
@@ -132,8 +132,9 @@ The procedure is to delete `package-lock.json` and every `node_modules`, reinsta
 ## Commands
 
 - `npm run dev` local development
-- `npm run check` typecheck + lint + tests (must pass before any work is done)
-- `npm run build` production build (also required when a change is client-reachable; it is the only check that walks the browser bundle). Unlike `dev`, this script does not load `.env`, so it fails locally at page-data collection with `Invalid environment configuration`. Run it as `npx dotenv-cli -e ../../.env -- next build` from `packages/app`. Vercel is unaffected because it injects env itself.
+- `npm run check` typecheck + lint + tests + production build (must pass before any work is done)
+- `npm run build:local` the production build on its own, with `.env` loaded. This is what `check` calls
+- `npm run build` the bare production build, for Vercel. It does not load `.env`, so run locally it fails at page-data collection with `Invalid environment configuration`. Vercel is unaffected because it injects env itself. Use `build:local` by hand; leave this one for the platform
 - `npm run db:indexes` apply index definitions idempotently
 
 ## Bedrock notes

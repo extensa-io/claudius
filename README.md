@@ -24,7 +24,7 @@ Open http://localhost:3000.
 
 - `npm run dev` — start the Next.js app in development mode
 - `npm run build` — production build
-- `npm run check` — typecheck + lint + tests across all workspaces; the gate that must pass before any phase is marked complete
+- `npm run check` — typecheck + lint + tests + production build across all workspaces; the gate that must pass before any work is called done
 - `npm run test` — Vitest run
 - `npm run typecheck` — TypeScript check across workspaces
 - `npm run lint` — ESLint across workspaces
